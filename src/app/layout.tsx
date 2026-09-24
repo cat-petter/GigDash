@@ -13,10 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GigDash",
+  title: "Gigs",
   description: "Stats about gig bookings from Apple Calendar.",
   // The name under the Home Screen icon.
-  appleWebApp: { capable: true, title: "GigDash" },
+  appleWebApp: { capable: true, title: "Gigs" },
   // A private dashboard: keep even the login page out of search results.
   robots: { index: false, follow: false },
 };

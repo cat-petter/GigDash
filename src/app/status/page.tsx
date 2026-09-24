@@ -12,7 +12,7 @@ import { formatDateTime, plural } from "@/lib/format";
 import { isPending, syncStatus } from "@/lib/run-sync";
 import { requireLogin } from "@/lib/session";
 
-export const metadata: Metadata = { title: "Status · GigDash" };
+export const metadata: Metadata = { title: "Status · Gigs" };
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -166,7 +166,7 @@ export default async function StatusPage() {
 
       <Card
         title="Calendars"
-        note={`GigDash reads only "${names.gigs}"${names.holds ? ` and "${names.holds}"` : ""}. It never changes anything in your calendar.`}
+        note={`This app reads only "${names.gigs}"${names.holds ? ` and "${names.holds}"` : ""}. It never changes anything in your calendar.`}
       >
         <Suspense fallback={<p className="text-sm text-muted">Checking iCloud…</p>}>
           <Calendars />

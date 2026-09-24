@@ -1,39 +1,39 @@
-# GigDash
+# Gigs
 
 A private dashboard of stats about the gigs in your Apple Calendar: how far ahead you get booked, money and job counts by person and by location, and how many holds turn into jobs.
 
-You keep putting gigs in Calendar the way you do now. GigDash only reads the calendar and never changes it.
+You keep putting gigs in Calendar the way you do now. The app only reads the calendar and never changes it.
 
 ## Setting it up
 
 This takes about 15 minutes, and a computer is easier than a phone for it. Everything it uses is free.
 
-### 1. Make an app password for GigDash
+### 1. Make an app password for the app
 
 1. Go to [account.apple.com](https://account.apple.com) and sign in.
 2. Open **Sign-In and Security**, then **App-Specific Passwords**.
-3. Make a new one called `GigDash` and copy it. It looks like `abcd-efgh-ijkl-mnop`.
+3. Make a new one called `Gigs app` and copy it. It looks like `abcd-efgh-ijkl-mnop`.
 
-This is a separate password for apps that connect to iCloud's calendars, contacts and mail. It can't sign in to your Apple account or change its settings, and GigDash only uses it to read the two gig calendars. You can delete it on that same page at any time, and GigDash stops being able to read your calendar straight away.
+This is a separate password for apps that connect to iCloud's calendars, contacts and mail. It can't sign in to your Apple account or change its settings, and the app only uses it to read the two gig calendars. You can delete it on that same page at any time, and the app stops being able to read your calendar straight away.
 
-### 2. Copy GigDash to your own accounts
+### 2. Copy the app to your own accounts
 
 1. If you don't have a GitHub account, make one at [github.com/signup](https://github.com/signup).
 2. Click this button:
 
-   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash&project-name=gigdash&repository-name=gigdash&env=ICLOUD_EMAIL%2CICLOUD_APP_PASSWORD%2CHOLDS_CALENDAR%2CDASHBOARD_PASSWORD%2CCRON_SECRET&envDescription=Your%20iCloud%20email%2C%20an%20Apple%20app-specific%20password%2C%20your%20holds%20calendar%20name%2C%20a%20password%20for%20the%20dashboard%20and%20a%20long%20random%20string.&envLink=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash%234-fill-in-the-settings&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash&project-name=gigs&repository-name=gigs&env=ICLOUD_EMAIL%2CICLOUD_APP_PASSWORD%2CHOLDS_CALENDAR%2CDASHBOARD_PASSWORD%2CCRON_SECRET&envDescription=Your%20iCloud%20email%2C%20an%20Apple%20app-specific%20password%2C%20your%20holds%20calendar%20name%2C%20a%20password%20for%20the%20dashboard%20and%20a%20long%20random%20string.&envLink=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash%234-fill-in-the-settings&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
 3. Vercel asks you to sign up or log in. Choose **Continue with GitHub**.
-4. Keep the name `gigdash`, and leave the copy **private**. Vercel makes your own copy of GigDash in your GitHub account.
+4. Keep the name `gigs`, and leave the copy **private**. Vercel makes your own copy of the app in your GitHub account.
 
 Vercel then walks you through the database (step 3) and the settings (step 4) before it finishes.
 
 ### 3. Add the database
 
-GigDash keeps its numbers in a small Postgres database from Neon.
+The app keeps its numbers in a small Postgres database from Neon.
 
 - Vercel offers Neon while you set up. Accept it, choose the **Free** plan, and pick the region in **Washington, D.C.** (US East) if it asks.
-- If it didn't offer Neon, open your project in Vercel and go to **Storage** → **Create Database** → **Neon**. Connect it to the `gigdash` project, then redeploy (see the end of step 4).
+- If it didn't offer Neon, open your project in Vercel and go to **Storage** → **Create Database** → **Neon**. Connect it to the `gigs` project, then redeploy (see the end of step 4).
 
 ### 4. Fill in the settings
 
@@ -44,7 +44,7 @@ Vercel asks for these while you set up. Type each value exactly, with no quotes.
 | `ICLOUD_EMAIL` | The email you sign in to iCloud with. |
 | `ICLOUD_APP_PASSWORD` | The app password from step 1, with its dashes. |
 | `HOLDS_CALENDAR` | The exact name of your holds calendar (the red one), as it shows in the Calendar app. |
-| `DASHBOARD_PASSWORD` | A new password you'll type to open GigDash. Don't reuse your Apple password. |
+| `DASHBOARD_PASSWORD` | A new password you'll type to open the app. Don't reuse your Apple password. |
 | `CRON_SECRET` | Any long random mix of letters and numbers, 30 or more. You never type it again; it just stops strangers from starting a sync. |
 
 Your gigs calendar is expected to be called `Gigs`. If it's called something else, also add `GIGS_CALENDAR` with its name.
@@ -53,7 +53,7 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
 
 ### 5. Check that it can read your calendars
 
-1. When Vercel finishes, it shows your site's address, like `https://gigdash-abc123.vercel.app`. Open it and log in with your `DASHBOARD_PASSWORD`.
+1. When Vercel finishes, it shows your site's address, like `https://gigs-abc123.vercel.app`. Open it and log in with your `DASHBOARD_PASSWORD`.
 2. Add `/status` to the end of the address and open that.
 3. Under **Calendars** you should see "Signed in to iCloud", with **Read as jobs** next to Gigs and **Read as holds** next to your holds calendar. If something is red, it says what's wrong, which is usually a typo in a setting.
 4. Tap **Sync now**. Under **Last 10 syncs**, the newest one should say **OK** and how many events it read.
@@ -64,22 +64,22 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
    4. Tap **Sync now** again. **Holds moved into Gigs** should go up by one.
    5. Delete the test event and sync once more.
 
-If **Holds moved into Gigs** stays at 0 after the move, tell whoever set GigDash up for you. It means the move isn't being recognised.
+If **Holds moved into Gigs** stays at 0 after the move, tell whoever set the app up for you. It means the move isn't being recognised.
 
 ### 6. Put it on your Home Screen
 
-On your iPhone, open your GigDash address in Safari, tap the **Share** button, then **Add to Home Screen**. It opens full-screen with its own icon, and stays logged in for 180 days.
+On your iPhone, open the app's address in Safari, tap the **Share** button, then **Add to Home Screen**. It shows up as **Gigs**, opens full-screen with its own icon, and stays logged in for 180 days.
 
-## How GigDash reads your gigs
+## How the app reads your gigs
 
 - **Titles** follow `<who> job|hold [price] [location]`, like `Kaller job 600 neemas hachaim`, `Kaller hold` or `Yitsy korblue job brooklyn`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`.
 - **The calendar decides** whether something is a job or a hold. If the title disagrees, the event shows up under **Needs attention** on the dashboard's **Gigs** tab.
-- **When a hold is confirmed**, move the event into Gigs rather than making a new one. That's how GigDash knows the hold became a job, and when.
+- **When a hold is confirmed**, move the event into Gigs rather than making a new one. That's how the app knows the hold became a job, and when.
 - **Names** are grouped without caring about capitals, so `Kaller` and `kaller` count as one person. Typos like `Kallr` count as a different person.
 - **Titles it can't read** show up under **Needs attention**. Fix the title in Calendar and the next sync picks it up.
 - **Syncing** happens once a day early in the morning (New York time), whenever you open the dashboard (if the last sync was more than 10 minutes ago), and when you tap **Sync now**.
 
-## What GigDash can and can't see
+## What the app can and can't see
 
 - It reads events from only the two calendars named in the settings. It sees the names of your other calendars, so the status page can list them, but never opens their events.
 - It never adds, changes or deletes anything in your calendar.

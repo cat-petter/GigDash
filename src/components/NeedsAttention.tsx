@@ -99,7 +99,7 @@ export function NeedsAttention({ attention, names }: { attention: Attention; nam
             Fix these titles in Apple Calendar. The next sync picks up the change. This list ignores the filters.
           </p>
           <Group
-            title="Titles GigDash couldn't read"
+            title="Titles that couldn't be read"
             help="A title needs a name, then “job” or “hold”, then an optional price and place, like “Kaller job 600 neemas hachaim”. These are left out of the per-person and per-place stats."
             gigs={unreadable}
           />

@@ -1,10 +1,10 @@
 import type { MetadataRoute } from "next";
 
-/** Lets "Add to Home Screen" open GigDash full-screen with its own icon. */
+/** Lets "Add to Home Screen" open Gigs full-screen with its own icon. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "GigDash",
-    short_name: "GigDash",
+    name: "Gigs",
+    short_name: "Gigs",
     description: "Stats about gig bookings from Apple Calendar.",
     start_url: "/",
     display: "standalone",

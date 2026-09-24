@@ -29,11 +29,11 @@ export function calendarNames(env: Env = process.env): CalendarNames {
   };
 }
 
-/** Refuses any request that could change his calendar, so the app can only ever read it. */
+/** Refuses any request that could change the calendar, so the app can only ever read it. */
 const readOnlyFetch: typeof fetch = (input, init) => {
   const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
   if (!READ_METHODS.has(method)) {
-    return Promise.reject(new Error(`Blocked a ${method} request: GigDash only reads the calendar`));
+    return Promise.reject(new Error(`Blocked a ${method} request: this app only reads the calendar`));
   }
   return fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(TIMEOUT_MS) });
 };

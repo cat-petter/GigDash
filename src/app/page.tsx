@@ -58,7 +58,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   const header = (
     <header className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">GigDash</h1>
+        <h1 className="text-2xl font-semibold">Gigs</h1>
         <Link href="/status" className="text-sm text-accent">
           Status
         </Link>
@@ -79,7 +79,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
       )}
       {zoneProblem && (
         <Notice>
-          APP_TIMEZONE isn&apos;t a time zone GigDash knows, so dates are counted in New York time.{" "}
+          APP_TIMEZONE isn&apos;t a time zone this app knows, so dates are counted in New York time.{" "}
           <Link href="/status" className="underline">
             See Status
           </Link>
@@ -95,7 +95,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
         {notices}
         <Card title="No gigs yet">
           <p className="text-sm text-muted">
-            Once GigDash reads your calendars, your gigs show up here. Tap Sync now, or open{" "}
+            Once the app reads your calendars, your gigs show up here. Tap Sync now, or open{" "}
             <Link href="/status" className="text-accent">
               Status
             </Link>{" "}

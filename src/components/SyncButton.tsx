@@ -57,7 +57,7 @@ export function SyncButton({ lastSyncedAt, running, error, now }: Props) {
       }
       if (!response.ok) setRequestError(`The sync request failed (${response.status})`);
     } catch {
-      setRequestError("Couldn't reach GigDash. Check your connection.");
+      setRequestError("Couldn't reach the app. Check your connection.");
     } finally {
       setPosting(false);
     }
