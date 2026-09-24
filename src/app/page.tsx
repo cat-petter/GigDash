@@ -15,6 +15,7 @@ import { type Filters, type LeadKey, parseFilters, withFilter } from "@/lib/filt
 import { formatMoney, plural } from "@/lib/format";
 import { loadGigRows } from "@/lib/gigs";
 import { autoSync, syncStatus } from "@/lib/run-sync";
+import { requireLogin } from "@/lib/session";
 import {
   computeStats,
   type CountBar,
@@ -81,6 +82,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 export default async function Dashboard({ searchParams }: PageProps<"/">) {
+  await requireLogin("/");
   await connection();
   const filters = parseFilters(await searchParams);
 

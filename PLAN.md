@@ -178,8 +178,9 @@ Environment variables:
 
 ## Progress (kept short; read this first after a context reset)
 
-- **Done, one commit each (local, not yet pushed):** steps 1–5.
-- **Now:** step 6. Login page (`/login`, checks `DASHBOARD_PASSWORD` via `auth.ts`), `src/proxy.ts` (read `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md` first; let through `/login`, the cron's `GET /api/sync`, static files, manifest and icons), `public/manifest.webmanifest` + icons, `vercel.json` daily cron. Then step 7 (README) and step 8 (push).
+- **Done, one commit each (local, not yet pushed):** steps 1–6.
+- **Now:** step 7 (README: developer setup incl. `npm run seed:demo`, plain-language setup for him, what the app can and can't see, the tentative hosting note), then step 8 (push to `claude/modest-cori-l4c5ho`, no PR).
+- **Step 6 files:** `src/app/login/{page,LoginForm,actions}.tsx|ts` (server action sets the 180-day cookie; 1s pause on a wrong password), `src/proxy.ts` + `src/proxy.test.ts` (matcher skips `/api/`, `_next`, png/svg/ico/webmanifest), `src/lib/session.ts` (`requireLogin` backstop in both pages), `src/app/manifest.ts`, `src/app/icon.svg` (master icon; PNGs `src/app/apple-icon.png`, `public/icon-{192,512}.png` rendered from it with Playwright), `vercel.json` (cron 10:00 UTC daily). Layout: noindex, theme-color, `colorScheme: "light dark"`.
 - **Step 5 files:** `scripts/seed-demo.ts` (`npm run seed:demo`), `src/lib/gigs.ts` (`loadGigRows`), `icloudConfigured()` in caldav.ts, components `Pending` (transition + `FilterLink`), `FilterBar` (pill selects), `StatTile`, `BarCard` (recharts, chart/table toggle), `PersonLeadTable`, `NeedsAttention`, `GigTable`. Dev server for screenshots: `next dev -p 3100`; Playwright scripts in the scratchpad.
 - **Files beyond the plan:** `src/lib/dates.ts` (`Day` = `"YYYY-MM-DD"` string, zone helpers), `src/lib/format.ts` (`timeAgo`, `formatMoney`, `plural`), `src/lib/run-sync.ts` (`runSync`, `startSync`, `autoSync`, `syncStatus`), `src/components/Card.tsx`. `auth.ts` already exists with tests (step 6 only needs the login page and `src/proxy.ts`).
 - **Stats API:** `computeStats(rows: GigRow[], filters, today)` returns `tiles`, `leadHistogram`, `leadByPerson`, `money`, `counts`, `gigs`. Also `filterOptions(rows)` and `needsAttention(rows)`. Filters live in the URL: `parseFilters`, `withFilter`, `toQuery`.

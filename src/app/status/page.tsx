@@ -10,6 +10,7 @@ import { appTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
 import { isPending, syncStatus } from "@/lib/run-sync";
+import { requireLogin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Status · GigDash" };
 
@@ -125,6 +126,7 @@ function Fact({ label, value, note }: { label: string; value: React.ReactNode; n
 }
 
 export default async function StatusPage() {
+  await requireLogin("/status");
   await connection();
   const now = new Date();
 
