@@ -178,20 +178,20 @@ Environment variables:
 
 ## Progress (kept short; read this first after a context reset)
 
-- **Done, one commit each (local, not yet pushed):** steps 1–6.
-- **Now:** step 7 (README: developer setup incl. `npm run seed:demo`, plain-language setup for him, what the app can and can't see, the tentative hosting note), then step 8 (push to `claude/modest-cori-l4c5ho`, no PR).
+- **Done, one commit each:** steps 1–7. Step 7 also added DB migrations: `prisma/migrations/0_init`, `npm run db:migrate` (`prisma migrate deploy`), `scripts/vercel-build.sh` (vercel.json `buildCommand`: migrate if a DB URL is set, then `next build`), and `prisma.config.ts` prefers `DATABASE_URL_UNPOOLED`.
+- **Now:** step 8 (push to `claude/modest-cori-l4c5ho`, no PR). The repo is private and this branch is its default branch; the README's Deploy button only works for others once it's public.
 - **Step 6 files:** `src/app/login/{page,LoginForm,actions}.tsx|ts` (server action sets the 180-day cookie; 1s pause on a wrong password), `src/proxy.ts` + `src/proxy.test.ts` (matcher skips `/api/`, `_next`, png/svg/ico/webmanifest), `src/lib/session.ts` (`requireLogin` backstop in both pages), `src/app/manifest.ts`, `src/app/icon.svg` (master icon; PNGs `src/app/apple-icon.png`, `public/icon-{192,512}.png` rendered from it with Playwright), `vercel.json` (cron 10:00 UTC daily). Layout: noindex, theme-color, `colorScheme: "light dark"`.
 - **Step 5 files:** `scripts/seed-demo.ts` (`npm run seed:demo`), `src/lib/gigs.ts` (`loadGigRows`), `icloudConfigured()` in caldav.ts, components `Pending` (transition + `FilterLink`), `FilterBar` (pill selects), `StatTile`, `BarCard` (recharts, chart/table toggle), `PersonLeadTable`, `NeedsAttention`, `GigTable`. Dev server for screenshots: `next dev -p 3100`; Playwright scripts in the scratchpad.
 - **Files beyond the plan:** `src/lib/dates.ts` (`Day` = `"YYYY-MM-DD"` string, zone helpers), `src/lib/format.ts` (`timeAgo`, `formatMoney`, `plural`), `src/lib/run-sync.ts` (`runSync`, `startSync`, `autoSync`, `syncStatus`), `src/components/Card.tsx`. `auth.ts` already exists with tests (step 6 only needs the login page and `src/proxy.ts`).
 - **Stats API:** `computeStats(rows: GigRow[], filters, today)` returns `tiles`, `leadHistogram`, `leadByPerson`, `money`, `counts`, `gigs`. Also `filterOptions(rows)` and `needsAttention(rows)`. Filters live in the URL: `parseFilters`, `withFilter`, `toQuery`.
-- **Local env:** Postgres 16 is running with the `gigdash` DB and schema pushed; `.env` exists (gitignored).
+- **Local env:** Postgres 16 is running with the `gigdash` DB, migrated (0_init baselined); `.env` exists (gitignored).
 - **Chart colors (checked with the dataviz validator):** jobs `#2a78d6` / dark `#3987e5`, holds `#eb6834` / dark `#d95926`.
 
 ## Verification
 
 - `npm test`: parser, iCalendar parsing, sync logic and stats.
 - `npm run build`: type-checks and confirms the production build succeeds.
-- Local Postgres (installed with apt in the container), then `prisma db push` and `npm run seed:demo`, then `npm run dev`.
+- Local Postgres (installed with apt in the container), then `npm run db:migrate` and `npm run seed:demo`, then `npm run dev`.
 - Playwright screenshots at iPhone width (390px) in light and dark mode. Check the filters, drill-down, tooltips and "Needs attention", and look for overflow or overlapping labels.
 - **What I can't verify from here:** the live iCloud connection, since it needs his password. The first real test is his `/status` page after he deploys. It shows:
   - which calendars were found,
