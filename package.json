@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:push": "prisma db push",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
     "eslint-config-next": "16.3.6",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.1"
   }

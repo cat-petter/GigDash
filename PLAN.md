@@ -176,6 +176,16 @@ Environment variables:
 7. Write the README.
 8. Commit and push to `claude/modest-cori-l4c5ho`.
 
+## Progress (kept short; read this first after a context reset)
+
+- **Done, one commit each (local, not yet pushed):** steps 1–5.
+- **Now:** step 6. Login page (`/login`, checks `DASHBOARD_PASSWORD` via `auth.ts`), `src/proxy.ts` (read `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md` first; let through `/login`, the cron's `GET /api/sync`, static files, manifest and icons), `public/manifest.webmanifest` + icons, `vercel.json` daily cron. Then step 7 (README) and step 8 (push).
+- **Step 5 files:** `scripts/seed-demo.ts` (`npm run seed:demo`), `src/lib/gigs.ts` (`loadGigRows`), `icloudConfigured()` in caldav.ts, components `Pending` (transition + `FilterLink`), `FilterBar` (pill selects), `StatTile`, `BarCard` (recharts, chart/table toggle), `PersonLeadTable`, `NeedsAttention`, `GigTable`. Dev server for screenshots: `next dev -p 3100`; Playwright scripts in the scratchpad.
+- **Files beyond the plan:** `src/lib/dates.ts` (`Day` = `"YYYY-MM-DD"` string, zone helpers), `src/lib/format.ts` (`timeAgo`, `formatMoney`, `plural`), `src/lib/run-sync.ts` (`runSync`, `startSync`, `autoSync`, `syncStatus`), `src/components/Card.tsx`. `auth.ts` already exists with tests (step 6 only needs the login page and `src/proxy.ts`).
+- **Stats API:** `computeStats(rows: GigRow[], filters, today)` returns `tiles`, `leadHistogram`, `leadByPerson`, `money`, `counts`, `gigs`. Also `filterOptions(rows)` and `needsAttention(rows)`. Filters live in the URL: `parseFilters`, `withFilter`, `toQuery`.
+- **Local env:** Postgres 16 is running with the `gigdash` DB and schema pushed; `.env` exists (gitignored).
+- **Chart colors (checked with the dataviz validator):** jobs `#2a78d6` / dark `#3987e5`, holds `#eb6834` / dark `#d95926`.
+
 ## Verification
 
 - `npm test`: parser, iCalendar parsing, sync logic and stats.

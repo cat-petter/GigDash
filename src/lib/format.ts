@@ -1,3 +1,5 @@
+import { type Day, dayToDate } from "./dates";
+
 /** "just now", "5 min ago", "3 hr ago", "2 days ago". */
 export function timeAgo(then: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - then.getTime()) / 60_000);
@@ -29,4 +31,11 @@ export function formatMoney(dollars: number): string {
 /** "1 job", "3 jobs" */
 export function plural(count: number, one: string, many = `${one}s`): string {
   return `${count.toLocaleString("en-US")} ${count === 1 ? one : many}`;
+}
+
+/** "Sep 24, 2026" for a calendar day. */
+export function formatDay(day: Day): string {
+  return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" }).format(
+    dayToDate(day),
+  );
 }

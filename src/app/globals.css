@@ -10,6 +10,11 @@
   --good: #1f7a3d;
   --bad: #b42318;
   --warn: #a15c07;
+  /* Chart series: jobs are always slot 1, holds slot 2 (checked for colorblind separation). */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --axis: #c3c2b7;
+  --hover: rgb(27 27 26 / 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,6 +28,10 @@
     --good: #5bc27d;
     --bad: #f07a6e;
     --warn: #e8a948;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --axis: #454a55;
+    --hover: rgb(231 231 228 / 0.06);
   }
 }
 
@@ -36,6 +45,8 @@
   --color-good: var(--good);
   --color-bad: var(--bad);
   --color-warn: var(--warn);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -43,4 +54,36 @@
 body {
   background: var(--bg);
   color: var(--fg);
+}
+
+/* Chart chrome: hairline solid grid, recessive axes, muted tick text. */
+.recharts-cartesian-grid line {
+  stroke: var(--line);
+}
+.recharts-cartesian-axis-line {
+  stroke: var(--axis);
+}
+.recharts-cartesian-axis-tick-value {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* The value at the tip of the longest bar. */
+.chart-label {
+  fill: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+}
+.recharts-tooltip-cursor {
+  fill: var(--hover);
+}
+/* Keep the keyboard focus ring, but not the box a tap leaves behind. */
+.recharts-wrapper:focus:not(:focus-visible),
+.recharts-wrapper :focus:not(:focus-visible) {
+  outline: none;
+}
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

@@ -38,6 +38,11 @@ const readOnlyFetch: typeof fetch = (input, init) => {
   return fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(TIMEOUT_MS) });
 };
 
+/** Whether the iCloud sign-in details have been filled in. Says nothing about whether they work. */
+export function icloudConfigured(env: Env = process.env): boolean {
+  return Boolean(env.ICLOUD_EMAIL?.trim() && env.ICLOUD_APP_PASSWORD?.trim());
+}
+
 async function connect() {
   const username = process.env.ICLOUD_EMAIL?.trim();
   const password = process.env.ICLOUD_APP_PASSWORD?.trim();
