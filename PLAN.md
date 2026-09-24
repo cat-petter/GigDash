@@ -1,0 +1,192 @@
+# GigDash — Build Plan
+
+## Context
+
+Your cousin is a musician who books gigs and puts them in Apple Calendar. He wants a dashboard of stats about those bookings without changing how he works. Apple Calendar stays the one place he enters and views his schedule. The app only **reads** it.
+
+What we know about how he enters gigs (from the screenshots and his answers):
+- Two gig calendars, separate from his personal one (green):
+  - **"Gigs"** (blue): confirmed jobs.
+  - A **holds calendar** (red): name not confirmed yet.
+- When a hold is confirmed, he edits the event and moves it into "Gigs".
+- Titles look like `<person> <job|hold> [price] [location]`. Real examples:
+  - `Kaller job 600 neemas hachaim`
+  - `Kaller hold`
+  - `Yitsy korblue job brooklyn` (a two-word, lowercase name with no price)
+- Gigs are **all-day** events.
+- He'll start adding a price to new titles. Older events won't have one.
+
+The stats he asked for:
+- **Lead time** (how far in advance he's booked), overall and per person, and he wants to filter by it.
+- **Money** by location and by person.
+- **Job counts** overall, by location and by person.
+- **Holds** tracked as well.
+
+Decisions already made in our conversation:
+- A web app on Vercel that he adds to his Home Screen. No native app (there's no Mac to build one).
+- The app reads his calendar over iCloud's calendar protocol (CalDAV). No Shortcuts.
+- No calendar owned by the app, and no merged calendar view inside the app. Without a clean two-way sync, that would just confuse him.
+- **Deployed on his own accounts** (tentative, not confirmed yet). He pastes his own Apple app-specific password into Vercel, and you never handle it. The code is the same either way; only the README setup differs.
+
+## Architecture
+
+- **Framework:** Next.js 14 (App Router, TypeScript) and Tailwind, hosted on Vercel.
+- **Database:** Postgres through Vercel's one-click Neon integration, accessed with Prisma. The integration sets `DATABASE_URL` automatically, so he doesn't need a separate Neon sign-up.
+- **Reading the calendar:** `tsdav` connects to `https://caldav.icloud.com` with his Apple ID email and app-specific password. It fetches **only** the two gig calendars, looked up by name from environment variables. His personal calendar is never fetched.
+- **Reading event data:** `node-ical` parses each event's raw iCalendar text.
+- **Charts:** `recharts`, using the dataviz skill's reference palette and mark specs. Dark mode gets its own dark steps from that palette; his phone runs in dark mode.
+- **When syncing happens:** Vercel's free (Hobby) plan limits cron jobs to about **once a day**, so three triggers are combined:
+  1. A daily cron job.
+  2. An automatic sync when the dashboard opens, if the last sync is more than 10 minutes old. Page load waits about 2 seconds for it.
+  3. A "Sync now" button.
+- **Stats computed in memory:** his data is a few hundred rows at most. The app loads the filtered rows and computes stats in plain TypeScript functions. That's simpler than SQL aggregation and easy to unit test.
+
+## Data model (`prisma/schema.prisma`)
+
+```
+Gig
+  uid           String  @unique   // the event's calendar UID; the key that survives moving Holds→Gigs
+  rawTitle      String
+  calendar      "gigs" | "holds"
+  status        "job" | "hold"     // decided by which calendar the event is in, not by the title word
+  person, personKey               // display name + lowercase/trimmed key for grouping
+  price         Int?              // whole dollars; null = not entered
+  location, locationKey
+  gigDate       Date              // all-day DTSTART
+  bookedAt      DateTime?         // the event's CREATED timestamp (when he first put it in his calendar)
+  leadDays      Int?              // gigDate − bookedAt, in days (America/New_York)
+  heldAt        DateTime?         // first seen in holds calendar
+  confirmedAt   DateTime?         // first seen in Gigs after being a hold (uses LAST-MODIFIED if present)
+  parseError    String?           // title couldn't be parsed → shown in "Needs attention"
+  deletedAt     DateTime?         // event disappeared from both calendars (hold fell through / cancelled)
+  firstSeenAt, lastSeenAt, createdAt, updatedAt
+
+SyncRun
+  startedAt, finishedAt, ok, message, fetched/created/updated/deleted counts
+```
+
+Rules:
+- **Moving calendars.** Rows are keyed by UID. A hold moved into "Gigs" updates the same row: status flips to `job` and `confirmedAt` is set. That gives hold→job conversion and time-to-confirm.
+- **Calendar vs. title.** The calendar decides the status. If the title's keyword disagrees (for example, it's in "Gigs" but still says "hold"), the calendar wins and the event is flagged in "Needs attention".
+- **Deleted events.** An event that vanishes from both calendars is soft-deleted and left out of stats. A deleted hold counts as "fell through" in the holds stats.
+- **Missing booking date.** If `CREATED` is missing, `bookedAt` falls back to `firstSeenAt`, but only for events that first appeared *after* the first sync. Events from the initial backfill without `CREATED` get `leadDays = null` and are left out of lead-time stats instead of getting a fake value.
+- **Lead time for converted holds.** It's measured from when the hold was first entered, since that's when the client reached out. The time from hold to confirmation is shown as its own stat.
+- **Repeating events** aren't expected for gigs. If one appears, only the first date is used and the event is flagged.
+
+## Title parser (`src/lib/parse-title.ts`)
+
+It works on tokens split by whitespace, is case-insensitive, and accepts `job`, `hold` or `on hold` as the keyword.
+- **Person:** every token before the keyword. Supports multi-word names like `Yitsy korblue`.
+- **Price (optional):** the token right after the keyword, if it looks like a price: `600`, `$600`, `1,200`, `1.5k`.
+- **Location (optional):** everything after that.
+- **No keyword:** returns a `parseError`. The row is still stored and shown in "Needs attention", so he can fix the title in Calendar and the next sync picks it up.
+- **Grouping:** names are grouped by a normalized key (lowercase, whitespace collapsed), so `Kaller` and `kaller` count as one person. Typos like `Kallr` are not merged in v1.
+
+## Sync (`src/lib/caldav.ts`, `src/lib/ics.ts`, `src/lib/sync.ts`)
+
+1. **`caldav.ts`** logs in, lists calendars, matches `GIGS_CALENDAR` and `HOLDS_CALENDAR` by display name, and fetches every event in each. If a name isn't found, it errors and lists the calendar names that do exist.
+2. **`ics.ts`** turns raw iCalendar text into `{ uid, title, gigDate, created, lastModified, hasRRule }`. This is a pure function.
+3. **`sync.ts`** combines the fetched events with the existing rows and returns the writes to make. This is also a pure function, so it's tested with sample data. A thin wrapper applies the writes in one transaction and records a `SyncRun`.
+4. **`/api/sync`** accepts either:
+   - `GET` from the Vercel cron job, checked with `Authorization: Bearer $CRON_SECRET`, or
+   - `POST` from the logged-in dashboard ("Sync now").
+
+## Dashboard (`src/app/page.tsx`, mobile-first, single column on phone)
+
+Filters are stored in the URL query string, so the page renders on the server and filtered views can be bookmarked. The filter bar is one row:
+- Date range: this year, last 12 months, all time, or custom.
+- Person.
+- Location.
+- Status: jobs, holds or all.
+- **Lead-time bucket:** under 1 week, 1–4 weeks, 1–3 months, 3+ months.
+
+Sections, top to bottom:
+1. **Header:** "last synced N min ago" and a Sync now button.
+2. **Stat tiles:**
+   - Jobs.
+   - Earned (past jobs) and Upcoming (future jobs). Price is the agreed amount; the app can't know whether he was actually paid.
+   - Median and average lead time.
+   - Open holds, and the hold→job rate.
+3. **Lead time:**
+   - A histogram by lead-time bucket.
+   - A per-person table: count, average and median lead days. Tapping a row filters to that person.
+4. **Money:**
+   - Bar charts of dollars by person and by location. The top 8 are shown and the rest are grouped as "Other".
+   - A note like "N jobs have no price", so totals aren't misleading while older events lack prices.
+5. **Job counts:** bars by month, by person and by location.
+6. **Needs attention:** titles that couldn't be parsed, jobs with no price, and keyword/calendar mismatches.
+7. **Gig list:** a sortable table of the filtered gigs (date, person, location, price, lead days, status).
+
+Every chart has hover and tap tooltips, and a table sits next to it. Single-series bars use palette slot 1 (blue). Wherever jobs and holds appear together: jobs use slot 1 (blue), holds use slot 2 (orange).
+
+Other pages:
+- **`/status`:** the diagnostics page. It shows the calendars found on the account, the last 10 sync runs, and how many events lack `CREATED`. This is where we confirm the live iCloud connection actually works.
+- **`/login`:** a single password field, checked against `DASHBOARD_PASSWORD`. `src/middleware.ts` sets and checks a signed cookie that lasts 180 days.
+- **Home Screen support:** `public/manifest.webmanifest` and an apple-touch-icon, so "Add to Home Screen" gives him a proper app icon that opens full-screen.
+
+## Files
+
+```
+prisma/schema.prisma
+src/lib/{parse-title,ics,caldav,sync,stats,filters,auth,db}.ts  (+ *.test.ts for parse-title, ics, sync, stats)
+src/middleware.ts
+src/app/{layout,page}.tsx, src/app/login/page.tsx, src/app/status/page.tsx, src/app/api/sync/route.ts
+src/components/{FilterBar,StatTile,BarCard,LeadTimeHistogram,GigTable,SyncButton}.tsx
+scripts/seed-demo.ts        # ~150 realistic fake gigs, so the UI can be built and demoed without iCloud
+vercel.json                 # daily cron → /api/sync
+.env.example, README.md, public/manifest.webmanifest + icons
+```
+
+Environment variables:
+
+| Variable | What it is |
+|---|---|
+| `DATABASE_URL` | Set automatically by the Neon integration. |
+| `ICLOUD_EMAIL` | His Apple ID email. |
+| `ICLOUD_APP_PASSWORD` | His app-specific password. |
+| `GIGS_CALENDAR` | Defaults to `Gigs`. |
+| `HOLDS_CALENDAR` | The holds calendar's name (still unknown). |
+| `DASHBOARD_PASSWORD` | The password for the dashboard login. |
+| `CRON_SECRET` | Lets only the Vercel cron job trigger a sync. |
+| `APP_TIMEZONE` | Defaults to `America/New_York`. |
+
+## README
+
+- **Developer section:** local setup, running tests, and seeding demo data.
+- **"Setting it up (for [cousin])" section**, in very plain language, one action per step:
+  1. Make an app-specific password at account.apple.com → Sign-In and Security → App-Specific Passwords. The README explains in one sentence that it can be revoked there at any time.
+  2. Create a GitHub account if needed, then click the "Deploy to Vercel" button. This clones the repo and creates the Vercel project.
+  3. In Vercel → Storage, add Neon Postgres (one click).
+  4. Paste the environment variables into Vercel's settings. Each one gets a one-line explanation.
+  5. Open `/status` and check that both calendars show up.
+  6. Open the site on his iPhone → Share → Add to Home Screen.
+- A short "What the app can and can't see" note: it reads only the two named calendars and never writes to his calendar. The password is kept only in Vercel's encrypted settings.
+- A tentative note: if he'd rather you host it, the steps are the same; you just enter the values instead of him.
+
+## Build order
+
+1. Scaffold the project (Next, Tailwind, Prisma, Vitest), write the schema, and build the title parser with tests using his real titles.
+2. Build `ics.ts` and the pure sync logic, with tests: create, update, hold→job move, delete, missing `CREATED`, repeating event.
+3. Add the CalDAV fetch, `/api/sync`, `SyncRun` records and the `/status` page.
+4. Write `stats.ts` and `filters.ts`, with tests: buckets, median, "Other" grouping, earned vs. upcoming.
+5. Build the dashboard UI against the seeded demo data.
+6. Add login, the Home Screen manifest and the cron config.
+7. Write the README.
+8. Commit and push to `claude/modest-cori-l4c5ho`.
+
+## Verification
+
+- `npm test`: parser, iCalendar parsing, sync logic and stats.
+- `npm run build`: type-checks and confirms the production build succeeds.
+- Local Postgres (installed with apt in the container), then `prisma db push` and `npm run seed:demo`, then `npm run dev`.
+- Playwright screenshots at iPhone width (390px) in light and dark mode. Check the filters, drill-down, tooltips and "Needs attention", and look for overflow or overlapping labels.
+- **What I can't verify from here:** the live iCloud connection, since it needs his password. The first real test is his `/status` page after he deploys. It shows:
+  - which calendars were found,
+  - whether events carry `CREATED` (this decides whether the lead time for his older gigs is available), and
+  - whether moving a hold into Gigs keeps the same event ID (the README asks him to do one test move).
+
+## Open items (don't block building; they're settings to fill in later)
+
+- The holds calendar's exact name. It goes in `HOLDS_CALENDAR`.
+- The price format he'll actually type, such as `600` vs. `$600`. The parser accepts both.
+- Whether he's really deploying on his own accounts (not confirmed). This only affects the README wording.
