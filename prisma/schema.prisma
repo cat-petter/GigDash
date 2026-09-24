@@ -34,21 +34,25 @@ model Gig {
   price        Int?
   location     String?
   locationKey  String?
-  /// The all-day DTSTART.
+  /// The all-day DTSTART (for a timed event, its day in APP_TIMEZONE).
   gigDate      DateTime    @db.Date
-  /// The event's CREATED timestamp, i.e. when he first put it in his calendar.
+  /// When he first put it in his calendar: the event's CREATED timestamp, kept at its
+  /// earliest if a move resets it. Without CREATED, the first sync that saw it, except
+  /// for events loaded by the very first sync, which stay null.
   bookedAt     DateTime?
   /// gigDate − bookedAt in days (APP_TIMEZONE). Null when bookedAt is unknown.
   leadDays     Int?
-  /// First seen in the holds calendar.
+  /// When it became a hold: bookedAt for a new hold, or the sync that saw a job moved to holds.
   heldAt       DateTime?
-  /// First seen in Gigs after being a hold.
+  /// When a hold was moved into Gigs: its LAST-MODIFIED if that's since the previous sync,
+  /// otherwise the sync that saw the move. Cleared if it goes back to holds.
   confirmedAt  DateTime?
   /// Set when the title couldn't be parsed. Shown in "Needs attention".
   parseError   String?
   /// The event has an RRULE. Only its first date is used, and it's flagged.
   recurring    Boolean     @default(false)
-  /// The event disappeared from both calendars. Left out of stats.
+  /// The event disappeared from both calendars. Left out of stats, except that a
+  /// deleted hold counts as one that fell through.
   deletedAt    DateTime?
   firstSeenAt  DateTime
   lastSeenAt   DateTime
