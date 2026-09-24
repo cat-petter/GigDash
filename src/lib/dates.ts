@@ -4,6 +4,17 @@ export type Day = string;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/** APP_TIMEZONE, the zone lead times and "today" are counted in. */
+export function appTimeZone(): string {
+  const zone = process.env.APP_TIMEZONE?.trim() || "America/New_York";
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+  } catch {
+    throw new Error(`APP_TIMEZONE "${zone}" isn't a time zone name like America/New_York`);
+  }
+  return zone;
+}
+
 export function isDay(value: string): value is Day {
   return DAY.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }

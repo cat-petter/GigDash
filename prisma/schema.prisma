@@ -61,14 +61,16 @@ model Gig {
 }
 
 model SyncRun {
-  id         String    @id @default(cuid())
-  startedAt  DateTime  @default(now())
+  id             String    @id @default(cuid())
+  startedAt      DateTime  @default(now())
   /// Null while the run is in progress, or if it crashed.
-  finishedAt DateTime?
-  ok         Boolean   @default(false)
-  message    String?
-  fetched    Int       @default(0)
-  created    Int       @default(0)
-  updated    Int       @default(0)
-  deleted    Int       @default(0)
+  finishedAt     DateTime?
+  ok             Boolean   @default(false)
+  message        String?
+  fetched        Int       @default(0)
+  created        Int       @default(0)
+  updated        Int       @default(0)
+  deleted        Int       @default(0)
+  /// Fetched events without a CREATED timestamp, i.e. with no booking date from Apple.
+  missingCreated Int       @default(0)
 }
