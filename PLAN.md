@@ -30,8 +30,8 @@ Decisions already made in our conversation:
 
 ## Architecture
 
-- **Framework:** Next.js 14 (App Router, TypeScript) and Tailwind, hosted on Vercel.
-- **Database:** Postgres through Vercel's one-click Neon integration, accessed with Prisma. The integration sets `DATABASE_URL` automatically, so he doesn't need a separate Neon sign-up.
+- **Framework:** Next.js 16 (App Router, TypeScript) and Tailwind 4, hosted on Vercel. (Originally Next 14, but 14.x is out of support and `npm audit` flags unpatched critical and high advisories in its newest release; 16 audits clean.)
+- **Database:** Postgres through Vercel's one-click Neon integration, accessed with Prisma 7 through the `@prisma/adapter-pg` driver adapter. The integration sets `DATABASE_URL` automatically, so he doesn't need a separate Neon sign-up.
 - **Reading the calendar:** `tsdav` connects to `https://caldav.icloud.com` with his Apple ID email and app-specific password. It fetches **only** the two gig calendars, looked up by name from environment variables. His personal calendar is never fetched.
 - **Reading event data:** `node-ical` parses each event's raw iCalendar text.
 - **Charts:** `recharts`, using the dataviz skill's reference palette and mark specs. Dark mode gets its own dark steps from that palette; his phone runs in dark mode.
@@ -57,7 +57,9 @@ Gig
   leadDays      Int?              // gigDate − bookedAt, in days (America/New_York)
   heldAt        DateTime?         // first seen in holds calendar
   confirmedAt   DateTime?         // first seen in Gigs after being a hold (uses LAST-MODIFIED if present)
+  titleKeyword  "job" | "hold"?   // the keyword the title used; ≠ status → keyword/calendar mismatch
   parseError    String?           // title couldn't be parsed → shown in "Needs attention"
+  recurring     Boolean           // has an RRULE → only the first date is used, and it's flagged
   deletedAt     DateTime?         // event disappeared from both calendars (hold fell through / cancelled)
   firstSeenAt, lastSeenAt, createdAt, updatedAt
 
@@ -121,7 +123,7 @@ Every chart has hover and tap tooltips, and a table sits next to it. Single-seri
 
 Other pages:
 - **`/status`:** the diagnostics page. It shows the calendars found on the account, the last 10 sync runs, and how many events lack `CREATED`. This is where we confirm the live iCloud connection actually works.
-- **`/login`:** a single password field, checked against `DASHBOARD_PASSWORD`. `src/middleware.ts` sets and checks a signed cookie that lasts 180 days.
+- **`/login`:** a single password field, checked against `DASHBOARD_PASSWORD`. `src/proxy.ts` (Next 16's name for middleware) sets and checks a signed cookie that lasts 180 days.
 - **Home Screen support:** `public/manifest.webmanifest` and an apple-touch-icon, so "Add to Home Screen" gives him a proper app icon that opens full-screen.
 
 ## Files
@@ -129,7 +131,7 @@ Other pages:
 ```
 prisma/schema.prisma
 src/lib/{parse-title,ics,caldav,sync,stats,filters,auth,db}.ts  (+ *.test.ts for parse-title, ics, sync, stats)
-src/middleware.ts
+src/proxy.ts
 src/app/{layout,page}.tsx, src/app/login/page.tsx, src/app/status/page.tsx, src/app/api/sync/route.ts
 src/components/{FilterBar,StatTile,BarCard,LeadTimeHistogram,GigTable,SyncButton}.tsx
 scripts/seed-demo.ts        # ~150 realistic fake gigs, so the UI can be built and demoed without iCloud

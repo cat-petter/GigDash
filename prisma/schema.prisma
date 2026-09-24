@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GigCalendar {
+  gigs
+  holds
+}
+
+enum GigStatus {
+  job
+  hold
+}
+
+model Gig {
+  id           String      @id @default(cuid())
+  /// The calendar event's UID. It stays the same when a hold is moved into Gigs.
+  uid          String      @unique
+  rawTitle     String
+  calendar     GigCalendar
+  /// Decided by which calendar the event is in, not by the title.
+  status       GigStatus
+  /// The keyword the title used (null if none). A mismatch with status goes to "Needs attention".
+  titleKeyword GigStatus?
+  person       String?
+  /// Lowercase, whitespace-collapsed person, used for grouping.
+  personKey    String?
+  /// Whole dollars. Null means no price was entered.
+  price        Int?
+  location     String?
+  locationKey  String?
+  /// The all-day DTSTART.
+  gigDate      DateTime    @db.Date
+  /// The event's CREATED timestamp, i.e. when he first put it in his calendar.
+  bookedAt     DateTime?
+  /// gigDate − bookedAt in days (APP_TIMEZONE). Null when bookedAt is unknown.
+  leadDays     Int?
+  /// First seen in the holds calendar.
+  heldAt       DateTime?
+  /// First seen in Gigs after being a hold.
+  confirmedAt  DateTime?
+  /// Set when the title couldn't be parsed. Shown in "Needs attention".
+  parseError   String?
+  /// The event has an RRULE. Only its first date is used, and it's flagged.
+  recurring    Boolean     @default(false)
+  /// The event disappeared from both calendars. Left out of stats.
+  deletedAt    DateTime?
+  firstSeenAt  DateTime
+  lastSeenAt   DateTime
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model SyncRun {
+  id         String    @id @default(cuid())
+  startedAt  DateTime  @default(now())
+  /// Null while the run is in progress, or if it crashed.
+  finishedAt DateTime?
+  ok         Boolean   @default(false)
+  message    String?
+  fetched    Int       @default(0)
+  created    Int       @default(0)
+  updated    Int       @default(0)
+  deleted    Int       @default(0)
+}
