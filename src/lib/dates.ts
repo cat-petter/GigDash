@@ -16,7 +16,10 @@ export function appTimeZone(): string {
 }
 
 export function isDay(value: string): value is Day {
-  return DAY.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  // Date.parse rolls "2026-02-30" over to March, so check it comes back unchanged.
+  if (!DAY.test(value)) return false;
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
 }
 
 /** The calendar day an instant falls on in the given time zone. */
