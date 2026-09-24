@@ -29,6 +29,8 @@ export const viewport: Viewport = {
   ],
   // Date pickers and dropdowns follow the phone's light or dark mode.
   colorScheme: "light dark",
+  // Lets the bottom tab bar sit under the iPhone's home indicator, padded by the safe area.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

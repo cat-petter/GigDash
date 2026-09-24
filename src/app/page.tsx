@@ -6,75 +6,29 @@ import { FilterBar } from "@/components/FilterBar";
 import { GigTable } from "@/components/GigTable";
 import { NeedsAttention } from "@/components/NeedsAttention";
 import { FilterLink, PendingFrame, PendingProvider } from "@/components/Pending";
-import { PersonLeadTable } from "@/components/PersonLeadTable";
+import { RankList } from "@/components/RankList";
 import { StatTile } from "@/components/StatTile";
 import { SyncButton } from "@/components/SyncButton";
+import { TabBar } from "@/components/TabBar";
 import { calendarNames, icloudConfigured } from "@/lib/caldav";
-import { addDays, appTimeZone, dayInZone } from "@/lib/dates";
-import { type Filters, type LeadKey, parseFilters, withFilter } from "@/lib/filters";
+import { appTimeZone, dayInZone } from "@/lib/dates";
+import { DEFAULT_FILTERS, parseFilters, withFilter } from "@/lib/filters";
 import { formatMoney, plural } from "@/lib/format";
 import { loadGigRows } from "@/lib/gigs";
 import { autoSync, syncStatus } from "@/lib/run-sync";
 import { requireLogin } from "@/lib/session";
-import {
-  computeStats,
-  type CountBar,
-  filterOptions,
-  type MoneyBar,
-  needsAttention,
-  OTHER_KEY,
-  type PeriodCount,
-} from "@/lib/stats";
+import { computeStats, filterOptions, needsAttention, type PeriodCount } from "@/lib/stats";
 
 const JOBS: Series = { key: "jobs", one: "job", many: "jobs", color: "var(--series-1)" };
 const HOLDS: Series = { key: "holds", one: "hold", many: "holds", color: "var(--series-2)" };
-// Money only ever comes from jobs, so it wears the jobs color.
-const MONEY: Series = { key: "dollars", one: "dollar", many: "dollars", color: "var(--series-1)" };
 
-function labelOf(bar: { label: string; others?: number }): string {
-  return bar.others ? `${bar.others} others` : bar.label;
-}
-
-function moneyRows(bars: MoneyBar[], link: (key: string) => string): BarRow[] {
-  return bars.map((bar) => ({
-    key: bar.key,
-    label: labelOf(bar),
-    note: `from ${plural(bar.jobs, "priced job")}`,
-    href: bar.key === OTHER_KEY ? undefined : link(bar.key),
-    values: { dollars: bar.dollars },
+function periodRows(periods: PeriodCount[]): BarRow[] {
+  return periods.map((period) => ({
+    key: period.key,
+    label: period.label,
+    full: period.full,
+    values: { jobs: period.jobs, holds: period.holds },
   }));
-}
-
-function countRows(bars: CountBar[], link: (key: string) => string): BarRow[] {
-  return bars.map((bar) => ({
-    key: bar.key,
-    label: labelOf(bar),
-    href: bar.key === OTHER_KEY ? undefined : link(bar.key),
-    values: { jobs: bar.jobs, holds: bar.holds },
-  }));
-}
-
-/** Tapping a month (or year) narrows the dates to it. */
-function periodRows(periods: PeriodCount[], filters: Filters): BarRow[] {
-  return periods.map((period) => {
-    let from: string;
-    let to: string;
-    if (period.key.length === 4) {
-      from = `${period.key}-01-01`;
-      to = `${period.key}-12-31`;
-    } else {
-      from = `${period.key}-01`;
-      const [year, month] = period.key.split("-").map(Number);
-      to = addDays(`${month === 12 ? year + 1 : year}-${String((month % 12) + 1).padStart(2, "0")}-01`, -1);
-    }
-    return {
-      key: period.key,
-      label: period.label,
-      full: period.full,
-      href: withFilter(filters, { range: "custom", from, to }),
-      values: { jobs: period.jobs, holds: period.holds },
-    };
-  });
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
@@ -158,175 +112,137 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   const { tiles } = stats;
 
   const countSeries = filters.show === "job" ? [JOBS] : filters.show === "hold" ? [HOLDS] : [JOBS, HOLDS];
-  const toPerson = (key: string) => withFilter(filters, { person: key });
-  const toLocation = (key: string) => withFilter(filters, { location: key });
-  const moneyEmpty =
-    filters.show === "hold" ? "Money comes from jobs, and this view shows only holds." : "No priced jobs in this view.";
-  const moneyNote =
-    stats.money.unpriced > 0
-      ? `${formatMoney(stats.money.total)} in all. ${plural(stats.money.unpriced, "job")} with no price ${stats.money.unpriced === 1 ? "is" : "are"} left out.`
-      : `${formatMoney(stats.money.total)} in all.`;
   const toFix = attention.unreadable.length + attention.mismatched.length + attention.recurring.length;
+  const nothing = stats.gigs.length === 0 && tiles.jobs === 0 && tiles.openHolds === 0;
+
+  const overview = (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <StatTile
+          label="Jobs"
+          value={tiles.jobs.toLocaleString("en-US")}
+          sub={`${tiles.pastJobs} played · ${tiles.upcomingJobs} coming up`}
+        />
+        <StatTile
+          label="Earned"
+          value={formatMoney(tiles.earned)}
+          sub={tiles.upcoming > 0 ? `+${formatMoney(tiles.upcoming)} coming up` : "From jobs played"}
+        />
+        <StatTile
+          label="Booked ahead"
+          value={tiles.leadMedian === null ? "—" : plural(Math.round(tiles.leadMedian), "day")}
+          sub={tiles.leadMedian === null ? "No booking dates yet" : "Typical (median)"}
+        />
+        <StatTile
+          label="Holds"
+          value={tiles.openHolds.toLocaleString("en-US")}
+          sub={
+            tiles.holdRate === null
+              ? "Still open"
+              : `Open · ${Math.round(tiles.holdRate * 100)}% became jobs`
+          }
+        />
+      </div>
+      {(tiles.unpriced > 0 || toFix > 0) && (
+        <p className="px-1 text-xs text-muted">
+          {tiles.unpriced > 0 && `${plural(tiles.unpriced, "job")} with no price ${tiles.unpriced === 1 ? "isn't" : "aren't"} in Earned. `}
+          {toFix > 0 && (
+            <FilterLink href={withFilter(filters, { tab: "gigs" })} className="text-accent">
+              {plural(toFix, "title")} {toFix === 1 ? "needs" : "need"} a look.
+            </FilterLink>
+          )}
+        </p>
+      )}
+      <BarCard
+        title="How far ahead gigs get booked"
+        note={
+          tiles.leadMissing
+            ? `${plural(tiles.leadMissing, "gig")} with no booking date left out.`
+            : undefined
+        }
+        rows={stats.leadHistogram.map((bar) => ({
+          key: bar.key,
+          label: bar.label,
+          values: { jobs: bar.jobs, holds: bar.holds },
+        }))}
+        series={countSeries}
+        direction="up"
+        format="count"
+        labelHeader="Booked ahead"
+        empty="None of these gigs has a booking date yet."
+        labelAll
+      />
+      <BarCard
+        title={stats.byPeriod[0]?.key.length === 4 ? "Gigs by year" : "Gigs by month"}
+        rows={periodRows(stats.byPeriod)}
+        series={countSeries}
+        direction="up"
+        format="count"
+        labelHeader="Month"
+        empty="No gigs in this view."
+      />
+    </>
+  );
+
+  const tabs = {
+    overview,
+    people: (
+      <RankList
+        rows={stats.people}
+        field="person"
+        filters={filters}
+        empty="No gigs in this view."
+      />
+    ),
+    places: (
+      <RankList
+        rows={stats.places}
+        field="location"
+        filters={filters}
+        empty="No gigs in this view."
+      />
+    ),
+    gigs: (
+      <>
+        <NeedsAttention attention={attention} names={calendarNames()} />
+        <GigTable
+          gigs={stats.gigs.map((gig) => ({
+            uid: gig.uid,
+            gigDate: gig.gigDate,
+            title: gig.title,
+            person: gig.person,
+            location: gig.location,
+            price: gig.price,
+            leadDays: gig.leadDays,
+            status: gig.status,
+          }))}
+        />
+      </>
+    ),
+  };
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-6">
+    <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 pt-6 pb-28">
       {header}
       {notices}
       <PendingProvider>
         <FilterBar filters={filters} people={options.people} locations={options.locations} />
         <PendingFrame>
-          {stats.gigs.length === 0 && tiles.jobs === 0 && tiles.openHolds === 0 ? (
+          {nothing && filters.tab !== "gigs" ? (
             <Card title="Nothing matches these filters">
               <p className="text-sm text-muted">
                 Try a wider date range, or{" "}
-                <FilterLink href="/" className="text-accent">
+                <FilterLink href={withFilter(DEFAULT_FILTERS, { tab: filters.tab })} className="text-accent">
                   clear the filters
                 </FilterLink>
                 .
               </p>
             </Card>
           ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <StatTile
-                  label="Jobs"
-                  value={tiles.jobs.toLocaleString("en-US")}
-                  sub={`${tiles.pastJobs} played · ${tiles.upcomingJobs} coming up`}
-                />
-                <StatTile label="Earned" value={formatMoney(tiles.earned)} sub="Jobs already played" />
-                <StatTile label="Upcoming" value={formatMoney(tiles.upcoming)} sub="Jobs still to play" />
-                <StatTile
-                  label="Lead time"
-                  value={tiles.leadMedian === null ? "—" : plural(Math.round(tiles.leadMedian), "day")}
-                  sub={
-                    tiles.leadAverage === null
-                      ? "No booking dates yet"
-                      : `Median · average ${plural(Math.round(tiles.leadAverage), "day")}`
-                  }
-                />
-                <StatTile label="Open holds" value={tiles.openHolds.toLocaleString("en-US")} sub="Dates still on hold" />
-                <StatTile
-                  label="Holds → jobs"
-                  value={tiles.holdRate === null ? "—" : `${Math.round(tiles.holdRate * 100)}%`}
-                  sub={
-                    tiles.holdRate === null
-                      ? "No holds decided yet"
-                      : `${tiles.converted} of ${tiles.converted + tiles.fellThrough} decided${
-                          tiles.medianDaysToConfirm === null
-                            ? ""
-                            : ` · confirmed in ${plural(Math.round(tiles.medianDaysToConfirm), "day")}`
-                        }`
-                  }
-                />
-              </div>
-              {(tiles.unpriced > 0 || toFix > 0) && (
-                <p className="text-xs text-muted">
-                  {tiles.unpriced > 0 &&
-                    `Earned and Upcoming leave out ${plural(tiles.unpriced, "job")} with no price in the title. `}
-                  {toFix > 0 && (
-                    <a href="#attention" className="text-accent">
-                      {plural(toFix, "event")} {toFix === 1 ? "needs" : "need"} a look.
-                    </a>
-                  )}
-                </p>
-              )}
-
-              <BarCard
-                title="Lead time"
-                note={`How far ahead gigs were booked. ${plural(tiles.leadCounted, "gig")}${
-                  tiles.leadMissing ? `; ${tiles.leadMissing} with no booking date left out` : ""
-                }.`}
-                rows={stats.leadHistogram.map((bar) => ({
-                  key: bar.key,
-                  label: bar.label,
-                  href: withFilter(filters, { lead: bar.key as LeadKey }),
-                  values: { jobs: bar.jobs, holds: bar.holds },
-                }))}
-                series={countSeries}
-                direction="up"
-                format="count"
-                labelHeader="Booked ahead"
-                empty="None of these gigs has a booking date yet."
-              />
-              {stats.leadByPerson.length > 0 && (
-                <Card title="Lead time by person" note="Days booked ahead. Tap a name to see only their gigs.">
-                  <PersonLeadTable
-                    rows={stats.leadByPerson.map((person) => ({ ...person, href: toPerson(person.key) }))}
-                  />
-                </Card>
-              )}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <BarCard
-                  title="Money by person"
-                  note={moneyNote}
-                  rows={moneyRows(stats.money.byPerson, toPerson)}
-                  series={[MONEY]}
-                  direction="right"
-                  format="money"
-                  labelHeader="Person"
-                  empty={moneyEmpty}
-                />
-                <BarCard
-                  title="Money by location"
-                  note={moneyNote}
-                  rows={moneyRows(stats.money.byLocation, toLocation)}
-                  series={[MONEY]}
-                  direction="right"
-                  format="money"
-                  labelHeader="Location"
-                  empty={moneyEmpty}
-                />
-              </div>
-
-              <BarCard
-                title={stats.counts.byPeriod[0]?.key.length === 4 ? "Gigs by year" : "Gigs by month"}
-                note="By the date of the gig."
-                rows={periodRows(stats.counts.byPeriod, filters)}
-                series={countSeries}
-                direction="up"
-                format="count"
-                labelHeader="Month"
-                empty="No gigs in this view."
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <BarCard
-                  title="Gigs by person"
-                  rows={countRows(stats.counts.byPerson, toPerson)}
-                  series={countSeries}
-                  direction="right"
-                  format="count"
-                  labelHeader="Person"
-                  empty="No gigs in this view."
-                />
-                <BarCard
-                  title="Gigs by location"
-                  rows={countRows(stats.counts.byLocation, toLocation)}
-                  series={countSeries}
-                  direction="right"
-                  format="count"
-                  labelHeader="Location"
-                  empty="No gigs in this view."
-                />
-              </div>
-
-              <NeedsAttention attention={attention} names={calendarNames()} />
-
-              <GigTable
-                gigs={stats.gigs.map((gig) => ({
-                  uid: gig.uid,
-                  gigDate: gig.gigDate,
-                  title: gig.title,
-                  person: gig.person,
-                  location: gig.location,
-                  price: gig.price,
-                  leadDays: gig.leadDays,
-                  status: gig.status,
-                }))}
-              />
-            </>
+            tabs[filters.tab]
           )}
         </PendingFrame>
+        <TabBar filters={filters} attention={toFix} />
       </PendingProvider>
     </main>
   );

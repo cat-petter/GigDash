@@ -1,10 +1,9 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { Bar, BarChart, type BarShapeProps, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMoney } from "@/lib/format";
 import { Card } from "./Card";
-import { FilterLink } from "./Pending";
 
 export type Series = {
   key: string;
@@ -22,8 +21,6 @@ export type BarRow = {
   full?: string;
   /** A muted line in the tooltip, e.g. "from 7 priced jobs". */
   note?: string;
-  /** Tapping the row in the table filters the dashboard to it. */
-  href?: string;
   values: Record<string, number>;
 };
 
@@ -39,6 +36,8 @@ type Props = {
   labelHeader: string;
   /** Shown instead of the chart when every value is zero. */
   empty: string;
+  /** Put the total on every bar, not just the biggest. For charts with only a few bars. */
+  labelAll?: boolean;
 };
 
 const RADIUS = 4;
@@ -46,7 +45,7 @@ const RADIUS = 4;
 const GAP = 2;
 const MAX_LABEL = 16;
 const ROW_HEIGHT = 34;
-const PLOT_HEIGHT = 200;
+const PLOT_HEIGHT = 150;
 /** The value axis's labels, included in the chart's height. */
 const AXIS_BAND = 24;
 
@@ -70,7 +69,7 @@ function shorten(label: string): string {
 /**
  * A bar segment with a rounded data end and a square baseline. Stacked segments
  * keep a small gap to the one below, and only the outermost segment is rounded.
- * The tallest bar carries its total at the tip.
+ * The tallest bar (or every bar, with labelAll) carries its total at the tip.
  */
 function Segment({
   shape,
@@ -79,6 +78,7 @@ function Segment({
   direction,
   format,
   maxKey,
+  labelAll,
   active,
 }: {
   shape: BarShapeProps;
@@ -87,6 +87,7 @@ function Segment({
   direction: Props["direction"];
   format: Props["format"];
   maxKey: string | null;
+  labelAll: boolean;
   active: boolean;
 }) {
   const row = shape.payload as BarRow;
@@ -119,7 +120,7 @@ function Segment({
 
   const color = series[index].color;
   const label =
-    outermost && row.key === maxKey ? (
+    outermost && (labelAll || row.key === maxKey) ? (
       direction === "up" ? (
         <text x={x + width / 2} y={y - 6} textAnchor="middle" className="chart-label">
           {formatValue(total(row, series), format)}
@@ -192,7 +193,13 @@ function Legend({ series }: { series: Series[] }) {
   );
 }
 
-function Chart({ rows, series, direction, format }: Pick<Props, "rows" | "series" | "direction" | "format">) {
+function Chart({
+  rows,
+  series,
+  direction,
+  format,
+  labelAll = false,
+}: Pick<Props, "rows" | "series" | "direction" | "format" | "labelAll">) {
   let maxKey: string | null = null;
   let max = 0;
   for (const row of rows) {
@@ -211,6 +218,7 @@ function Chart({ rows, series, direction, format }: Pick<Props, "rows" | "series
           direction={direction}
           format={format}
           maxKey={maxKey}
+          labelAll={labelAll}
           active={active}
         />
       );
@@ -296,13 +304,7 @@ function DataTable({ rows, series, format, labelHeader }: Pick<Props, "rows" | "
           {rows.map((row) => (
             <tr key={row.key}>
               <td className="px-1 py-1.5">
-                {row.href ? (
-                  <FilterLink href={row.href} className="text-accent">
-                    {row.full ?? row.label}
-                  </FilterLink>
-                ) : (
-                  (row.full ?? row.label)
-                )}
+                {row.full ?? row.label}
                 {row.note && <span className="block text-xs text-muted">{row.note}</span>}
               </td>
               {series.map((s) => (
@@ -321,38 +323,26 @@ function DataTable({ rows, series, format, labelHeader }: Pick<Props, "rows" | "
   );
 }
 
-/** A bar chart with a table view of the same numbers. */
-export function BarCard({ title, note, rows, series, direction, format, labelHeader, empty }: Props) {
-  const [view, setView] = useState<"chart" | "table">("chart");
+/**
+ * A bar chart. Tapping a bar shows its numbers; a screen reader gets the same
+ * numbers as a table instead.
+ */
+export function BarCard({ title, note, rows, series, direction, format, labelHeader, empty, labelAll }: Props) {
   const hasData = rows.some((row) => total(row, series) > 0);
-
-  const toggle = hasData && (
-    <div role="group" aria-label="View" className="flex shrink-0 rounded-full border border-line p-0.5 text-xs">
-      {(["chart", "table"] as const).map((option) => (
-        <button
-          key={option}
-          type="button"
-          aria-pressed={view === option}
-          onClick={() => setView(option)}
-          className={`rounded-full px-2.5 py-1 capitalize ${view === option ? "bg-fg text-bg" : "text-muted"}`}
-        >
-          {option}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
-    <Card title={title} note={note} aside={toggle}>
+    <Card title={title} note={note}>
       {!hasData ? (
         <p className="text-sm text-muted">{empty}</p>
-      ) : view === "chart" ? (
-        <>
-          <Legend series={series} />
-          <Chart rows={rows} series={series} direction={direction} format={format} />
-        </>
       ) : (
-        <DataTable rows={rows} series={series} format={format} labelHeader={labelHeader} />
+        <>
+          <div aria-hidden>
+            <Legend series={series} />
+            <Chart rows={rows} series={series} direction={direction} format={format} labelAll={labelAll} />
+          </div>
+          <div className="sr-only">
+            <DataTable rows={rows} series={series} format={format} labelHeader={labelHeader} />
+          </div>
+        </>
       )}
     </Card>
   );

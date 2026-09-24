@@ -29,18 +29,24 @@ export type GigRow = {
   deleted: boolean;
 };
 
-export const OTHER_KEY = "(other)";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-/** How many people or places a chart shows before grouping the rest as "Other". */
-export const TOP_N = 8;
 /** Past this many months, "by month" becomes "by year". */
 const MAX_MONTHS = 36;
 
-export type MoneyBar = { key: string; label: string; dollars: number; jobs: number; others?: number };
-export type CountBar = { key: string; label: string; jobs: number; holds: number; others?: number };
 export type PeriodCount = { key: string; label: string; full: string; jobs: number; holds: number };
 export type LeadBar = { key: string; label: string; jobs: number; holds: number };
-export type PersonLead = { key: string; label: string; count: number; average: number; median: number };
+/** One person or place on the People and Places tabs. */
+export type Ranked = {
+  key: string;
+  label: string;
+  jobs: number;
+  holds: number;
+  /** From priced jobs only. */
+  dollars: number;
+  unpriced: number;
+  /** Median days booked ahead, or null when none of their gigs has a booking date. */
+  leadMedian: number | null;
+};
 
 export function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -52,15 +58,6 @@ export function median(values: number[]): number | null {
 export function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-/**
- * The first `limit` items, then the rest merged into one by `combine`.
- * Items should already be sorted. A lone leftover item is shown as itself rather than as "Other".
- */
-export function topWithOther<T>(items: T[], limit: number, combine: (rest: T[]) => T): T[] {
-  if (items.length <= limit + 1) return items;
-  return [...items.slice(0, limit), combine(items.slice(limit))];
 }
 
 type Group = { key: string; label: string; rows: GigRow[] };
@@ -114,44 +111,22 @@ export const byLocation = (rows: GigRow[]) => groupBy(rows, locationKeyOf, locat
 const byLabel = (a: { label: string }, b: { label: string }) =>
   a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
-function moneyBars(groups: Group[]): MoneyBar[] {
-  const bars = groups
+/** Everyone (or everywhere) in view, most gigs first. No "Other": the list scrolls instead. */
+function ranked(groups: Group[]): Ranked[] {
+  return groups
     .map((group) => {
-      const priced = group.rows.filter((row) => row.price !== null);
+      const jobs = group.rows.filter((row) => row.status === "job");
       return {
         key: group.key,
         label: group.label,
-        dollars: priced.reduce((sum, row) => sum + row.price!, 0),
-        jobs: priced.length,
+        jobs: jobs.length,
+        holds: group.rows.length - jobs.length,
+        dollars: sum(jobs),
+        unpriced: jobs.filter((row) => row.price === null).length,
+        leadMedian: median(group.rows.filter(hasLead).map((row) => row.leadDays)),
       };
     })
-    .filter((bar) => bar.jobs > 0)
-    .sort((a, b) => b.dollars - a.dollars || byLabel(a, b));
-  return topWithOther(bars, TOP_N, (rest) => ({
-    key: OTHER_KEY,
-    label: "Other",
-    dollars: rest.reduce((sum, bar) => sum + bar.dollars, 0),
-    jobs: rest.reduce((sum, bar) => sum + bar.jobs, 0),
-    others: rest.length,
-  }));
-}
-
-function countBars(groups: Group[]): CountBar[] {
-  const bars = groups
-    .map((group) => ({
-      key: group.key,
-      label: group.label,
-      jobs: group.rows.filter((row) => row.status === "job").length,
-      holds: group.rows.filter((row) => row.status === "hold").length,
-    }))
     .sort((a, b) => b.jobs + b.holds - (a.jobs + a.holds) || b.jobs - a.jobs || byLabel(a, b));
-  return topWithOther(bars, TOP_N, (rest) => ({
-    key: OTHER_KEY,
-    label: "Other",
-    jobs: rest.reduce((sum, bar) => sum + bar.jobs, 0),
-    holds: rest.reduce((sum, bar) => sum + bar.holds, 0),
-    others: rest.length,
-  }));
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -236,8 +211,6 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
   const withLead = shown.filter(hasLead);
   const leads = withLead.map((row) => row.leadDays);
 
-  const shownJobs = shown.filter((row) => row.status === "job");
-
   return {
     bounds,
     tiles: {
@@ -268,29 +241,9 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
         holds: withLead.filter((row) => row.status === "hold" && leadBucket(row.leadDays) === bucket.key).length,
       }),
     ),
-    leadByPerson: byPerson(withLead)
-      .map(
-        (group): PersonLead => ({
-          key: group.key,
-          label: group.label,
-          count: group.rows.length,
-          average: average(group.rows.map((row) => row.leadDays!))!,
-          median: median(group.rows.map((row) => row.leadDays!))!,
-        }),
-      )
-      .sort((a, b) => b.count - a.count || byLabel(a, b)),
-    money: {
-      byPerson: moneyBars(byPerson(shownJobs)),
-      byLocation: moneyBars(byLocation(shownJobs)),
-      total: sum(shownJobs),
-      /** Shown jobs with no price. */
-      unpriced: shownJobs.filter((row) => row.price === null).length,
-    },
-    counts: {
-      byPeriod: countsByPeriod(shown, bounds),
-      byPerson: countBars(byPerson(shown)),
-      byLocation: countBars(byLocation(shown)),
-    },
+    byPeriod: countsByPeriod(shown, bounds),
+    people: ranked(byPerson(shown)),
+    places: ranked(byLocation(shown)),
     /** The gig list, latest first. */
     gigs: [...shown].sort((a, b) => b.gigDate.localeCompare(a.gigDate)),
   };

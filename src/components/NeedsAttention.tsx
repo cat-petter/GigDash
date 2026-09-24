@@ -1,7 +1,6 @@
 import type { CalendarNames } from "@/lib/caldav";
 import { formatDay, plural } from "@/lib/format";
 import type { Attention, GigRow } from "@/lib/stats";
-import { Card } from "./Card";
 
 function Item({ gig, reason }: { gig: GigRow; reason?: string }) {
   return (
@@ -70,45 +69,63 @@ export function NeedsAttention({ attention, names }: { attention: Attention; nam
   const nothing = unreadable.length + mismatched.length + recurring.length + unpriced.length === 0;
   const holdsName = names.holds ? `“${names.holds}”` : "the holds calendar";
 
+  const toFix = unreadable.length + mismatched.length + recurring.length;
+
   return (
-    <div id="attention" className="scroll-mt-4">
-      <Card
-        title="Needs attention"
-        note="Fix these titles in Apple Calendar. The next sync picks up the change. This list ignores the filters."
-      >
-        {nothing ? (
-          <p className="text-sm text-muted">Nothing to fix. Every title reads cleanly.</p>
-        ) : (
-          <div className="space-y-3">
-            <Group
-              title="Titles GigDash couldn't read"
-              help="A title needs a name, then “job” or “hold”, then an optional price and place, like “Kaller job 600 neemas hachaim”. These are left out of the per-person and per-place stats."
-              gigs={unreadable}
-            />
-            <Group
-              title="Title and calendar disagree"
-              help="The calendar decides whether it's a job or a hold, so these are counted by their calendar."
-              gigs={mismatched}
-              reason={(gig) =>
-                gig.status === "job"
-                  ? `Says “hold” but it's in “${names.gigs}”, so it's counted as a job.`
-                  : `Says “job” but it's in ${holdsName}, so it's counted as a hold.`
-              }
-            />
-            <Group
-              title="Repeating events"
-              help="Gigs aren't expected to repeat, so only the first date is counted."
-              gigs={recurring}
-            />
-            <Group
-              title="Jobs with no price"
-              help={`Money totals leave these out. Older gigs often have no price, which is fine. ${plural(unpriced.length, "job")} in all.`}
-              gigs={unpriced}
-              collapsed
-            />
-          </div>
-        )}
-      </Card>
-    </div>
+    <details id="attention" className="group/attention scroll-mt-4 rounded-2xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+        <span>
+          <span className="block text-base font-semibold">Needs attention</span>
+          <span className="block text-xs text-muted">
+            {nothing
+              ? "Nothing to fix. Every title reads cleanly."
+              : toFix > 0
+                ? `${plural(toFix, "title")} to fix in Apple Calendar`
+                : `${plural(unpriced.length, "job")} with no price`}
+          </span>
+        </span>
+        <span className="flex items-center gap-2">
+          {toFix > 0 && (
+            <span className="rounded-full bg-warn px-2 text-xs leading-5 font-semibold text-bg">{toFix}</span>
+          )}
+          <svg aria-hidden viewBox="0 0 12 12" className="size-3.5 text-muted transition-transform group-open/attention:rotate-180">
+            <path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </span>
+      </summary>
+      {!nothing && (
+        <div className="space-y-3 px-4 pb-4">
+          <p className="text-xs text-muted">
+            Fix these titles in Apple Calendar. The next sync picks up the change. This list ignores the filters.
+          </p>
+          <Group
+            title="Titles GigDash couldn't read"
+            help="A title needs a name, then “job” or “hold”, then an optional price and place, like “Kaller job 600 neemas hachaim”. These are left out of the per-person and per-place stats."
+            gigs={unreadable}
+          />
+          <Group
+            title="Title and calendar disagree"
+            help="The calendar decides whether it's a job or a hold, so these are counted by their calendar."
+            gigs={mismatched}
+            reason={(gig) =>
+              gig.status === "job"
+                ? `Says “hold” but it's in “${names.gigs}”, so it's counted as a job.`
+                : `Says “job” but it's in ${holdsName}, so it's counted as a hold.`
+            }
+          />
+          <Group
+            title="Repeating events"
+            help="Gigs aren't expected to repeat, so only the first date is counted."
+            gigs={recurring}
+          />
+          <Group
+            title="Jobs with no price"
+            help={`Money totals leave these out. Older gigs often have no price, which is fine. ${plural(unpriced.length, "job")} in all.`}
+            gigs={unpriced}
+            collapsed
+          />
+        </div>
+      )}
+    </details>
   );
 }

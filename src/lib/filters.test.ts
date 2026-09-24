@@ -3,6 +3,7 @@ import {
   DEFAULT_FILTERS,
   type Filters,
   dateBounds,
+  extraFilterCount,
   inScope,
   isFiltered,
   leadBucket,
@@ -59,6 +60,7 @@ describe("parseFilters", () => {
         location: NONE_KEY,
         show: "hold",
         lead: "1to3m",
+        tab: "people",
       }),
     ).toEqual({
       range: "custom",
@@ -68,11 +70,12 @@ describe("parseFilters", () => {
       location: NONE_KEY,
       show: "hold",
       lead: "1to3m",
+      tab: "people",
     });
   });
 
   it("falls back to defaults for values it doesn't know", () => {
-    expect(parseFilters({ range: "forever", show: "maybe", lead: "soon", person: "  " })).toEqual(DEFAULT_FILTERS);
+    expect(parseFilters({ range: "forever", show: "maybe", lead: "soon", person: "  ", tab: "money" })).toEqual(DEFAULT_FILTERS);
   });
 
   it("takes the first of repeated parameters", () => {
@@ -114,6 +117,16 @@ describe("toQuery and withFilter", () => {
 
   it("drops custom dates when switching to another range", () => {
     expect(withFilter(filters({ range: "custom", from: "2025-01-01" }), { range: "all" })).toBe("/?range=all");
+  });
+
+  it("keeps the tab in the URL, but doesn't count it as a filter", () => {
+    expect(withFilter(filters({ tab: "gigs" }), { person: "kaller" })).toBe("/?person=kaller&tab=gigs");
+    expect(isFiltered(filters({ tab: "gigs" }))).toBe(false);
+  });
+
+  it("counts the filters besides the dates", () => {
+    expect(extraFilterCount(filters({ range: "all" }))).toBe(0);
+    expect(extraFilterCount(filters({ person: "kaller", show: "job", lead: "3m" }))).toBe(3);
   });
 });
 

@@ -8,8 +8,6 @@ import {
   type GigRow,
   median,
   needsAttention,
-  OTHER_KEY,
-  topWithOther,
 } from "./stats";
 
 const TODAY = "2026-09-24";
@@ -70,19 +68,6 @@ describe("median and average", () => {
   });
 });
 
-describe("topWithOther", () => {
-  const combine = (rest: number[]) => rest.reduce((a, b) => a + b, 0);
-
-  it("keeps the top items and merges the rest", () => {
-    expect(topWithOther([9, 8, 7, 6, 5], 3, combine)).toEqual([9, 8, 7, 11]);
-  });
-
-  it("doesn't make an 'Other' out of a single leftover", () => {
-    expect(topWithOther([9, 8, 7, 6], 3, combine)).toEqual([9, 8, 7, 6]);
-    expect(topWithOther([9, 8], 3, combine)).toEqual([9, 8]);
-  });
-});
-
 describe("money", () => {
   it("splits earned (past) from upcoming, with today counted as upcoming", () => {
     const { tiles } = stats([
@@ -103,50 +88,25 @@ describe("money", () => {
   });
 
   it("leaves holds and deleted jobs out of the money", () => {
-    const { tiles, money } = stats([
+    const { tiles } = stats([
       gig({ price: 500 }),
       hold({ price: 900 }),
       gig({ price: 800, deleted: true }),
     ]);
     expect(tiles.earned).toBe(500);
-    expect(money.total).toBe(500);
-  });
-
-  it("shows the top 8 people and groups the rest as Other", () => {
-    const rows = Array.from({ length: 11 }, (_, i) => person(`Person ${i + 1}`, { price: 1000 - i * 50 }));
-    const bars = stats(rows).money.byPerson;
-    expect(bars).toHaveLength(9);
-    expect(bars[0]).toMatchObject({ label: "Person 1", dollars: 1000, jobs: 1 });
-    expect(bars[8]).toEqual({ key: OTHER_KEY, label: "Other", dollars: 600 + 550 + 500, jobs: 3, others: 3 });
-  });
-
-  it("sums per person, leaves out people with no priced jobs, and notes unpriced jobs", () => {
-    const { money } = stats([
-      person("Kaller", { price: 600 }),
-      person("Kaller", { price: 400 }),
-      person("Kaller", { price: null }),
-      person("Reb Yossi", { price: null }),
-    ]);
-    expect(money.byPerson).toEqual([{ key: "kaller", label: "Kaller", dollars: 1000, jobs: 2 }]);
-    expect(money.unpriced).toBe(2);
-  });
-
-  it("groups gigs without a location as 'No location'", () => {
-    const { money } = stats([gig({ location: null, locationKey: null, price: 300 })]);
-    expect(money.byLocation).toEqual([{ key: NONE_KEY, label: "No location", dollars: 300, jobs: 1 }]);
   });
 
   it("labels a group with its most common spelling, ties going to the latest gig", () => {
-    const { money } = stats([
+    const { people } = stats([
       gig({ person: "kaller", gigDate: "2026-01-01" }),
       gig({ person: "Kaller", gigDate: "2026-02-01" }),
       gig({ person: "Kaller", gigDate: "2026-03-01" }),
       gig({ person: "KALLER", gigDate: "2026-04-01" }),
     ]);
-    expect(money.byPerson[0].label).toBe("Kaller");
+    expect(people[0].label).toBe("Kaller");
 
     const tie = stats([gig({ person: "kaller", gigDate: "2026-05-01" }), gig({ person: "Kaller", gigDate: "2026-01-01" })]);
-    expect(tie.money.byPerson[0].label).toBe("kaller");
+    expect(tie.people[0].label).toBe("kaller");
   });
 });
 
@@ -217,19 +177,6 @@ describe("lead time", () => {
     expect(stats(rows, { lead: "1to3m" }).tiles.jobs).toBe(1);
   });
 
-  it("lists count, average and median per person, busiest first", () => {
-    const rows = [
-      person("Reb Yossi", { leadDays: 10 }),
-      person("Kaller", { leadDays: 10 }),
-      person("Kaller", { leadDays: 20 }),
-      person("Kaller", { leadDays: 90 }),
-      person("Kaller", { leadDays: null }),
-    ];
-    expect(stats(rows).leadByPerson).toEqual([
-      { key: "kaller", label: "Kaller", count: 3, average: 40, median: 20 },
-      { key: "reb yossi", label: "Reb Yossi", count: 1, average: 10, median: 10 },
-    ]);
-  });
 });
 
 describe("date range", () => {
@@ -237,6 +184,36 @@ describe("date range", () => {
     const rows = [gig({ gigDate: "2025-12-31" }), gig({ gigDate: "2026-01-01" }), gig({ gigDate: "2026-12-31" })];
     expect(stats(rows).tiles.jobs).toBe(2);
     expect(stats(rows, { range: "all" }).tiles.jobs).toBe(3);
+  });
+});
+
+describe("people and places", () => {
+  it("sums jobs, holds, money and lead time for each, most gigs first", () => {
+    const { people, places } = stats([
+      person("Weiss", { price: 500, leadDays: 10 }),
+      person("Kaller", { price: 600, leadDays: 20 }),
+      person("Kaller", { price: null, leadDays: 40 }),
+      hold({ leadDays: null }),
+      person("Kaller", { price: 900, deleted: true }),
+    ]);
+    expect(people).toEqual([
+      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, dollars: 600, unpriced: 1, leadMedian: 30 },
+      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, dollars: 500, unpriced: 0, leadMedian: 10 },
+    ]);
+    expect(places).toHaveLength(1);
+    expect(places[0]).toMatchObject({ key: "neemas hachaim", jobs: 3, holds: 1, dollars: 1100 });
+  });
+
+  it("follows the jobs/holds filter and gives no lead time when there's none", () => {
+    const { people } = stats([gig(), hold({ leadDays: null })], { show: "hold" });
+    expect(people).toEqual([
+      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, dollars: 0, unpriced: 0, leadMedian: null },
+    ]);
+  });
+
+  it("groups gigs without a location as 'No location'", () => {
+    const { places } = stats([gig({ location: null, locationKey: null, price: 300 })]);
+    expect(places).toMatchObject([{ key: NONE_KEY, label: "No location", dollars: 300 }]);
   });
 });
 

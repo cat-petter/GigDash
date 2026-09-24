@@ -73,7 +73,7 @@ On your iPhone, open your GigDash address in Safari, tap the **Share** button, t
 ## How GigDash reads your gigs
 
 - **Titles** follow `<who> job|hold [price] [location]`, like `Kaller job 600 neemas hachaim`, `Kaller hold` or `Yitsy korblue job brooklyn`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`.
-- **The calendar decides** whether something is a job or a hold. If the title disagrees, the event shows up under **Needs attention** on the dashboard.
+- **The calendar decides** whether something is a job or a hold. If the title disagrees, the event shows up under **Needs attention** on the dashboard's **Gigs** tab.
 - **When a hold is confirmed**, move the event into Gigs rather than making a new one. That's how GigDash knows the hold became a job, and when.
 - **Names** are grouped without caring about capitals, so `Kaller` and `kaller` count as one person. Typos like `Kallr` count as a different person.
 - **Titles it can't read** show up under **Needs attention**. Fix the title in Calendar and the next sync picks it up.

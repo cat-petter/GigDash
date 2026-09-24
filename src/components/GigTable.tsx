@@ -17,7 +17,7 @@ export type GigListItem = {
 };
 
 type SortKey = "date" | "person" | "price" | "lead";
-const FIRST_PAGE = 50;
+const FIRST_PAGE = 20;
 const monthDay = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
 
 const COLUMNS: { key: SortKey; label: string; title?: string; align: "left" | "right" }[] = [
