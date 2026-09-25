@@ -119,9 +119,9 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     <>
       <div className="grid grid-cols-2 gap-3">
         <StatTile
-          label="Jobs"
-          value={tiles.jobs.toLocaleString("en-US")}
-          sub={`${tiles.pastJobs} played · ${tiles.upcomingJobs} coming up`}
+          label="Upcoming jobs"
+          value={tiles.upcomingJobs.toLocaleString("en-US")}
+          sub={`${tiles.pastJobs} played · ${tiles.jobs} in all`}
         />
         <StatTile
           label="Earned"
