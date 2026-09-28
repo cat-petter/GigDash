@@ -204,4 +204,4 @@ Environment variables:
 
 - The holds calendar's exact name. It goes in `HOLDS_CALENDAR`.
 - The price format he'll actually type, such as `600` vs. `$600`. The parser accepts both.
-- Whether he's really deploying on his own accounts (not confirmed). This only affects the README wording.
+- Hosting: decided. He makes GitHub + Vercel accounts and the Apple app password and sends the sign-ins; the user does the host steps (README "Setting it up for him") while signed in as him. Neon is created inside Vercel, so there's no Neon account.

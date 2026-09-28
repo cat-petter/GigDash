@@ -6,69 +6,80 @@ You keep putting gigs in Calendar the way you do now. The app only reads the cal
 
 ## Setting it up
 
-This takes about 15 minutes, and a computer is easier than a phone for it. Everything it uses is free.
+There are two parts. You make the accounts, which takes about 10 minutes and works fine on a phone. Whoever is setting it up for you does the rest.
 
-### 1. Make an app password for the app
+### Your part
 
-1. Go to [account.apple.com](https://account.apple.com) and sign in.
-2. Open **Sign-In and Security**, then **App-Specific Passwords**.
-3. Make a new one called `Gigs app` and copy it. It looks like `abcd-efgh-ijkl-mnop`.
+1. **GitHub:** make an account at [github.com/signup](https://github.com/signup). Pick a password you don't use anywhere else, since you'll be sending it.
+2. **Vercel:** go to [vercel.com/signup](https://vercel.com/signup), choose **Hobby**, and tap **Continue with GitHub**. There's no second password, because it signs in with your GitHub account.
+3. **Apple app password:**
+   1. Go to [account.apple.com](https://account.apple.com) and sign in.
+   2. Open **Sign-In and Security**, then **App-Specific Passwords**.
+   3. Make a new one called `Gigs app`. It looks like `abcd-efgh-ijkl-mnop`.
+4. **Send these** to whoever is setting it up:
+   - your GitHub email and password
+   - the app password from step 3
+   - the email you sign in to iCloud with
+   - the exact name of your holds calendar, as it shows in the Calendar app (and your gigs calendar's name, if it isn't `Gigs`)
 
-This is a separate password for apps that connect to iCloud's calendars, contacts and mail. It can't sign in to your Apple account or change its settings, and the app only uses it to read the two gig calendars. You can delete it on that same page at any time, and the app stops being able to read your calendar straight away.
+**Never send your Apple ID password.** The app password is all that's needed. It can't sign in to your Apple account or change its settings, and the app only uses it to read the two gig calendars. You can delete it at account.apple.com at any time, and the app stops being able to read your calendar straight away.
 
-### 2. Copy the app to your own accounts
+Keep your phone nearby while they set it up, because GitHub may email you a code to confirm the new sign-in. Once it's done you can change your GitHub password, and the app keeps working.
 
-1. If you don't have a GitHub account, make one at [github.com/signup](https://github.com/signup).
-2. Click this button:
+When it's ready you'll get the app's address and a password to open it. Then put it on your Home Screen: open the address in Safari on your iPhone, tap **Share**, then **Add to Home Screen**. It shows up as **Gigs**, opens full-screen with its own icon, and stays logged in for 180 days.
 
-   [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash&project-name=gigs&repository-name=gigs&env=ICLOUD_EMAIL%2CICLOUD_APP_PASSWORD%2CHOLDS_CALENDAR%2CDASHBOARD_PASSWORD%2CCRON_SECRET&envDescription=Your%20iCloud%20email%2C%20an%20Apple%20app-specific%20password%2C%20your%20holds%20calendar%20name%2C%20a%20password%20for%20the%20dashboard%20and%20a%20long%20random%20string.&envLink=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash%234-fill-in-the-settings&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+### Setting it up for him
 
-3. Vercel asks you to sign up or log in. Choose **Continue with GitHub**.
-4. Keep the name `gigs`, and leave the copy **private**. Vercel makes your own copy of the app in your GitHub account.
+Sign in to GitHub as him, then to Vercel with **Continue with GitHub**. A computer is easiest. It takes about 15 minutes, and everything it uses is free.
 
-Vercel then walks you through the database (step 3) and the settings (step 4) before it finishes.
+#### 1. Copy the app to his accounts
 
-### 3. Add the database
+Click this button:
 
-The app keeps its numbers in a small Postgres database from Neon.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash&project-name=gigs&repository-name=gigs&env=ICLOUD_EMAIL%2CICLOUD_APP_PASSWORD%2CHOLDS_CALENDAR%2CDASHBOARD_PASSWORD%2CCRON_SECRET&envDescription=Your%20iCloud%20email%2C%20an%20Apple%20app-specific%20password%2C%20your%20holds%20calendar%20name%2C%20a%20password%20for%20the%20dashboard%20and%20a%20long%20random%20string.&envLink=https%3A%2F%2Fgithub.com%2Fcat-petter%2FGigDash%233-fill-in-the-settings&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+
+Keep the name `gigs` and leave the copy **private**. Vercel makes a new repository in his GitHub account with a copy of the code, then walks you through the database (step 2) and the settings (step 3).
+
+The button can only copy a public repository. While `cat-petter/GigDash` is private, make it public on GitHub (**Settings** → **General** → **Danger Zone** → **Change visibility**), deploy, then make it private again. His copy is a separate repository, so it stays private and keeps working.
+
+#### 2. Add the database
+
+The app keeps its numbers in a small Postgres database from Neon. There's no separate Neon account to make, because Vercel creates it inside the project.
 
 - Vercel offers Neon while you set up. Accept it, choose the **Free** plan, and pick the region in **Washington, D.C.** (US East) if it asks.
-- If it didn't offer Neon, open your project in Vercel and go to **Storage** → **Create Database** → **Neon**. Connect it to the `gigs` project, then redeploy (see the end of step 4).
+- If it didn't offer Neon, open the project in Vercel and go to **Storage** → **Create Database** → **Neon**. Connect it to the `gigs` project, then redeploy (see the end of step 3).
 
-### 4. Fill in the settings
+#### 3. Fill in the settings
 
 Vercel asks for these while you set up. Type each value exactly, with no quotes.
 
 | Setting | What to put |
 |---|---|
-| `ICLOUD_EMAIL` | The email you sign in to iCloud with. |
-| `ICLOUD_APP_PASSWORD` | The app password from step 1, with its dashes. |
-| `HOLDS_CALENDAR` | The exact name of your holds calendar (the red one), as it shows in the Calendar app. |
-| `DASHBOARD_PASSWORD` | A new password you'll type to open the app. Don't reuse your Apple password. |
-| `CRON_SECRET` | Any long random mix of letters and numbers, 30 or more. You never type it again; it just stops strangers from starting a sync. |
+| `ICLOUD_EMAIL` | The email he signs in to iCloud with. |
+| `ICLOUD_APP_PASSWORD` | His `Gigs app` password, with its dashes. |
+| `HOLDS_CALENDAR` | The exact name of his holds calendar (the red one), as it shows in the Calendar app. |
+| `DASHBOARD_PASSWORD` | A new password he'll type to open the app. Don't reuse his Apple or GitHub password. |
+| `CRON_SECRET` | Any long random mix of letters and numbers, 30 or more. Nobody types it again; it just stops strangers from starting a sync. |
 
-Your gigs calendar is expected to be called `Gigs`. If it's called something else, also add `GIGS_CALENDAR` with its name.
+His gigs calendar is expected to be called `Gigs`. If it's called something else, also add `GIGS_CALENDAR` with its name.
 
-To change a setting later, open the project in Vercel, go to **Settings** → **Environment Variables**, and edit it. Then open **Deployments**, tap **⋯** next to the top one, and choose **Redeploy**. Changes only apply after a redeploy. Changing `DASHBOARD_PASSWORD` or `CRON_SECRET` logs you out everywhere.
+To change a setting later, open the project in Vercel, go to **Settings** → **Environment Variables**, and edit it. Then open **Deployments**, tap **⋯** next to the top one, and choose **Redeploy**. Changes only apply after a redeploy. Changing `DASHBOARD_PASSWORD` or `CRON_SECRET` logs him out everywhere.
 
-### 5. Check that it can read your calendars
+#### 4. Check that it can read his calendars
 
-1. When Vercel finishes, it shows your site's address, like `https://gigs-abc123.vercel.app`. Open it and log in with your `DASHBOARD_PASSWORD`.
+1. When Vercel finishes, it shows the site's address, like `https://gigs-abc123.vercel.app`. Open it and log in with the `DASHBOARD_PASSWORD`.
 2. Add `/status` to the end of the address and open that.
-3. Under **Calendars** you should see "Signed in to iCloud", with **Read as jobs** next to Gigs and **Read as holds** next to your holds calendar. If something is red, it says what's wrong, which is usually a typo in a setting.
+3. Under **Calendars** you should see "Signed in to iCloud", with **Read as jobs** next to Gigs and **Read as holds** next to his holds calendar. If something is red, it says what's wrong, which is usually a typo in a setting.
 4. Tap **Sync now**. Under **Last 10 syncs**, the newest one should say **OK** and how many events it read.
-5. Do one test move:
-   1. In Calendar, make an all-day event called `Test hold` in your holds calendar.
+5. Do one test move with him:
+   1. He makes an all-day event called `Test hold` in his holds calendar.
    2. Tap **Sync now** on the status page.
-   3. In Calendar, edit the event and change its calendar to Gigs.
+   3. He edits the event and changes its calendar to Gigs.
    4. Tap **Sync now** again. **Holds moved into Gigs** should go up by one.
-   5. Delete the test event and sync once more.
+   5. He deletes the test event, and you sync once more.
 
-If **Holds moved into Gigs** stays at 0 after the move, tell whoever set the app up for you. It means the move isn't being recognised.
-
-### 6. Put it on your Home Screen
-
-On your iPhone, open the app's address in Safari, tap the **Share** button, then **Add to Home Screen**. It shows up as **Gigs**, opens full-screen with its own icon, and stays logged in for 180 days.
+   If **Holds moved into Gigs** stays at 0 after the move, the move isn't being recognised, and the app will count converted holds as new jobs.
+6. Send him the address and the `DASHBOARD_PASSWORD`.
 
 ## How the app reads your gigs
 
@@ -86,10 +97,6 @@ On your iPhone, open the app's address in Safari, tap the **Share** button, then
 - It keeps a copy of those gigs' titles and dates in your own database, to work out the stats.
 - Your app password is stored only in Vercel's encrypted settings. It isn't in the code or the database.
 - The dashboard is behind your `DASHBOARD_PASSWORD`. A login lasts 180 days on each device.
-
-## If someone else hosts it
-
-If you'd rather not run it on your own accounts, someone else can host it for you. The steps are the same, except that they do steps 2 to 6 and enter the settings. That means giving them your app password from step 1. You can still delete it at account.apple.com at any time.
 
 ## Settings reference
 
