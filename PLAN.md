@@ -9,7 +9,7 @@ What we know about how he enters gigs (from the screenshots and his answers):
   - **"Gigs"** (blue): confirmed jobs.
   - A **holds calendar** (red): name not confirmed yet.
 - When a hold is confirmed, he edits the event and moves it into "Gigs".
-- Titles look like `<person> <job|hold> [price] [location]`. Real examples:
+- Titles were `<person> <job|hold> [price] [location]`; the parser now takes any order (see Title parser). Real examples:
   - `Kaller job 600 neemas hachaim`
   - `Kaller hold`
   - `Yitsy korblue job brooklyn` (a two-word, lowercase name with no price)
@@ -77,11 +77,12 @@ Rules:
 
 ## Title parser (`src/lib/parse-title.ts`)
 
-It works on tokens split by whitespace, is case-insensitive, and accepts `job`, `hold` or `on hold` as the keyword.
-- **Person:** every token before the keyword. Supports multi-word names like `Yitsy korblue`.
-- **Price (optional):** the token right after the keyword, if it looks like a price: `600`, `$600`, `1,200`, `1.5k`.
-- **Location (optional):** everything after that.
-- **No keyword:** returns a `parseError`. The row is still stored and shown in "Needs attention", so he can fix the title in Calendar and the next sync picks it up.
+Any order. `job`/`hold`/`on hold` are optional (only used to flag calendar mismatches) and also split parts.
+- **Price:** any price-looking token (`600`, `$600`, `600$`, `1,200`, `1.5k`); one with `$` or `k` beats a bare number.
+- **Location:** words after `at`/`@`.
+- **Lexicon:** `buildLexicon(titles)` learns people (words before the keyword) and places (words after it, or after `at`) from all titles, plus the unknown half of two-part titles. Known phrases are matched anywhere (longest first). `planSync` builds it from every title each sync, so all old rows get re-read.
+- **Fallback:** parts are split by keyword, price, `,`, ` - `, etc. The first unknown part is the person, the rest is the location. A single unsplit unknown run is all person.
+- **No person found:** `parseError` "No name in the title", shown in "Needs attention".
 - **Grouping:** names are grouped by a normalized key (lowercase, whitespace collapsed), so `Kaller` and `kaller` count as one person. Typos like `Kallr` are not merged in v1.
 
 ## Sync (`src/lib/caldav.ts`, `src/lib/ics.ts`, `src/lib/sync.ts`)
@@ -182,6 +183,7 @@ Environment variables:
 - **Step 8 done:** everything is pushed to `claude/modest-cori-l4c5ho` (no PR). The repo is private and this branch is its default branch; the README's Deploy button only works for others once it's public. Still unverified: live iCloud (first real check is his `/status`).
 - **Step 6 files:** `src/app/login/{page,LoginForm,actions}.tsx|ts` (server action sets the 180-day cookie; 1s pause on a wrong password), `src/proxy.ts` + `src/proxy.test.ts` (matcher skips `/api/`, `_next`, png/svg/ico/webmanifest), `src/lib/session.ts` (`requireLogin` backstop in both pages), `src/app/manifest.ts`, `src/app/icon.svg` (master icon; PNGs `src/app/apple-icon.png`, `public/icon-{192,512}.png` rendered from it with Playwright), `vercel.json` (cron 10:00 UTC daily). Layout: noindex, theme-color, `colorScheme: "light dark"`.
 - **Redesign (after step 8, from feedback: too much scrolling, too complicated):** four tabs in the URL (`tab` in `Filters`: overview · people · places · gigs) with a fixed bottom `TabBar`. Overview = 4 tiles + lead histogram + by-month chart. People/Places = `RankList` (sortable by gigs/money/lead, from `stats.people`/`stats.places`). Gigs = collapsible `NeedsAttention` + `GigTable`. `FilterBar` = date pill + Filter panel + removable chips. Dropped: chart/table toggle, money/count charts by person and location, `PersonLeadTable`.
+- **Any-order titles (his request):** `parse-title.ts` rewritten with a learned lexicon; `planSync` re-reads every title each sync. See Title parser.
 - **Renamed to "Gigs"** in the UI, manifest and README. Kept internal names as they were: repo `cat-petter/GigDash`, npm package, `gigdash_session` cookie, local DB name.
 - **Step 5 files:** `scripts/seed-demo.ts` (`npm run seed:demo`), `src/lib/gigs.ts` (`loadGigRows`), `icloudConfigured()` in caldav.ts, components `Pending` (transition + `FilterLink`), `FilterBar` (pill selects), `StatTile`, `BarCard` (recharts, chart/table toggle), `PersonLeadTable`, `NeedsAttention`, `GigTable`. Dev server for screenshots: `next dev -p 3100`; Playwright scripts in the scratchpad.
 - **Files beyond the plan:** `src/lib/dates.ts` (`Day` = `"YYYY-MM-DD"` string, zone helpers), `src/lib/format.ts` (`timeAgo`, `formatMoney`, `plural`), `src/lib/run-sync.ts` (`runSync`, `startSync`, `autoSync`, `syncStatus`), `src/components/Card.tsx`. `auth.ts` already exists with tests (step 6 only needs the login page and `src/proxy.ts`).

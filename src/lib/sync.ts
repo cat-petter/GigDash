@@ -1,7 +1,7 @@
 import type { Gig, GigCalendar, GigStatus } from "@/generated/prisma/client";
 import { type Day, dayInZone, dayToDate, daysBetween } from "./dates";
 import type { IcsEvent } from "./ics";
-import { parseTitle } from "./parse-title";
+import { buildLexicon, type Lexicon, parseTitle } from "./parse-title";
 
 /** A Gig row without the columns the database fills in. */
 export type GigData = Omit<Gig, "id" | "createdAt" | "updatedAt">;
@@ -35,8 +35,8 @@ export type SyncPlan = {
 
 const STATUS: Record<GigCalendar, GigStatus> = { gigs: "job", holds: "hold" };
 
-function titleFields(title: string) {
-  const parsed = parseTitle(title);
+function titleFields(title: string, lexicon: Lexicon) {
+  const parsed = parseTitle(title, lexicon);
   if (!parsed.ok) {
     return {
       titleKeyword: null,
@@ -83,7 +83,7 @@ function confirmedTime(event: FetchedEvent, row: GigData, now: Date): Date {
   return now;
 }
 
-function newRow(event: FetchedEvent, input: SyncInput): GigData {
+function newRow(event: FetchedEvent, input: SyncInput, lexicon: Lexicon): GigData {
   const { now, backfill, timeZone } = input;
   const status = STATUS[event.calendar];
   // Without CREATED, the first time we see an event is close to when he entered it,
@@ -94,7 +94,7 @@ function newRow(event: FetchedEvent, input: SyncInput): GigData {
     rawTitle: event.title,
     calendar: event.calendar,
     status,
-    ...titleFields(event.title),
+    ...titleFields(event.title, lexicon),
     gigDate: dayToDate(event.gigDate),
     bookedAt,
     leadDays: leadDays(bookedAt, event.gigDate, timeZone),
@@ -107,7 +107,7 @@ function newRow(event: FetchedEvent, input: SyncInput): GigData {
   };
 }
 
-function updatedRow(event: FetchedEvent, row: GigData, input: SyncInput): GigData {
+function updatedRow(event: FetchedEvent, row: GigData, input: SyncInput, lexicon: Lexicon): GigData {
   const { now, timeZone } = input;
   const status = STATUS[event.calendar];
   // Moving an event between calendars may give it a new CREATED. Lead time for a
@@ -127,7 +127,7 @@ function updatedRow(event: FetchedEvent, row: GigData, input: SyncInput): GigDat
     rawTitle: event.title,
     calendar: event.calendar,
     status,
-    ...titleFields(event.title),
+    ...titleFields(event.title, lexicon),
     gigDate: dayToDate(event.gigDate),
     bookedAt,
     leadDays: leadDays(bookedAt, event.gigDate, timeZone),
@@ -171,14 +171,19 @@ export function planSync(input: SyncInput): SyncPlan {
   const plan: SyncPlan = { create: [], update: [], seen: [], delete: [], warnings: [] };
   const events = dedupe(input.fetched, plan.warnings);
   const rows = new Map(input.existing.map((row) => [row.uid, row]));
+  // Names and places are learned from every title, so all of them are re-read each sync.
+  const lexicon = buildLexicon([
+    ...[...events.values()].map((event) => event.title),
+    ...input.existing.filter((row) => !events.has(row.uid)).map((row) => row.rawTitle),
+  ]);
 
   for (const event of events.values()) {
     const row = rows.get(event.uid);
     if (!row) {
-      plan.create.push(newRow(event, input));
+      plan.create.push(newRow(event, input, lexicon));
       continue;
     }
-    const diff = changes(row, updatedRow(event, row, input));
+    const diff = changes(row, updatedRow(event, row, input, lexicon));
     if (Object.keys(diff).length === 0) {
       plan.seen.push(row.uid);
     } else {

@@ -83,8 +83,9 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
 
 ## How the app reads your gigs
 
-- **Titles** follow `<who> job|hold [price] [location]`, like `Kaller job 600 neemas hachaim`, `Kaller hold` or `Yitsy korblue job brooklyn`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`.
-- **The calendar decides** whether something is a job or a hold. If the title disagrees, the event shows up under **Needs attention** on the dashboard's **Gigs** tab.
+- **Titles** can have the name, price and place in any order, like `Kaller job 600 neemas hachaim`, `neemas hachaim 600 Kaller` or `Kaller $600 at boro park`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`. Writing `job` or `hold` is optional too.
+- **Names and places are learned** from all his titles. Once `neemas hachaim` has been a place in one title, it's read as the place wherever it shows up. For a name or place the app hasn't seen yet, put `at` before the place (`Shmuli 500 at Ateres Chynka`) or a comma between them, or keep the old order with the name first. Every sync re-reads all the titles, so old entries pick up what it learns.
+- **The calendar decides** whether something is a job or a hold. If the title says `job` or `hold` and disagrees, the event shows up under **Needs attention** on the dashboard's **Gigs** tab.
 - **When a hold is confirmed**, move the event into Gigs rather than making a new one. That's how the app knows the hold became a job, and when.
 - **Names** are grouped without caring about capitals, so `Kaller` and `kaller` count as one person. Typos like `Kallr` count as a different person.
 - **Titles it can't read** show up under **Needs attention**. Fix the title in Calendar and the next sync picks it up.

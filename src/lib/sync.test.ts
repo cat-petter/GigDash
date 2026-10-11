@@ -103,14 +103,30 @@ describe("planSync", () => {
     });
 
     it("stores a title it can't parse and records the error", () => {
-      const [row] = sync([event({ title: "Kaller 600 brooklyn" })], []).create;
+      const [row] = sync([event({ title: "job 600" })], []).create;
       expect(row).toMatchObject({
-        rawTitle: "Kaller 600 brooklyn",
+        rawTitle: "job 600",
         status: "job",
         titleKeyword: null,
         person: null,
         price: null,
-        parseError: 'No "job" or "hold" in the title',
+        parseError: "No name in the title",
+      });
+    });
+
+    it("reads names and places in any order, using what it learned from his other titles", () => {
+      const { create } = sync(
+        [
+          event({ uid: "a", title: "Kaller job 600 neemas hachaim" }),
+          event({ uid: "b", title: "neemas hachaim 700 Kaller" }),
+        ],
+        [],
+      );
+      expect(create.find((row) => row.uid === "b")).toMatchObject({
+        person: "Kaller",
+        price: 700,
+        location: "neemas hachaim",
+        parseError: null,
       });
     });
 
