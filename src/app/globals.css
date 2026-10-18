@@ -10,9 +10,10 @@
   --good: #1f7a3d;
   --bad: #b42318;
   --warn: #a15c07;
-  /* Chart series: jobs are always slot 1, holds slot 2 (checked for colorblind separation). */
+  /* Chart series: jobs are always slot 1, holds slot 2, wanted slot 3 (checked for colorblind separation). */
   --series-1: #2a78d6;
   --series-2: #eb6834;
+  --series-3: #1f9e89;
   --axis: #c3c2b7;
   --hover: rgb(27 27 26 / 0.05);
 }
@@ -30,6 +31,7 @@
     --warn: #e8a948;
     --series-1: #3987e5;
     --series-2: #d95926;
+    --series-3: #24a08b;
     --axis: #454a55;
     --hover: rgb(231 231 228 / 0.06);
   }
@@ -47,6 +49,7 @@
   --color-warn: var(--warn);
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

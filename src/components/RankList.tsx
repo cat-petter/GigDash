@@ -15,7 +15,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 const FIRST_PAGE = 10;
 
 function valueOf(row: Ranked, sort: SortKey): number | null {
-  if (sort === "gigs") return row.jobs + row.holds;
+  if (sort === "gigs") return row.jobs + row.holds + row.wanted;
   if (sort === "money") return row.dollars > 0 ? row.dollars : null;
   return row.leadMedian;
 }
@@ -31,6 +31,7 @@ function shown(row: Ranked, sort: SortKey): string {
 function details(row: Ranked): string {
   const parts = [plural(row.jobs, "job")];
   if (row.holds) parts.push(plural(row.holds, "hold"));
+  if (row.wanted) parts.push(`${row.wanted} wanted`);
   if (row.dollars) parts.push(formatMoney(row.dollars));
   if (row.leadMedian !== null) parts.push(`booked ${plural(Math.round(row.leadMedian), "day")} ahead`);
   return parts.join(" · ");
@@ -61,7 +62,8 @@ export function RankList({ rows, field, filters, empty }: Props) {
     return y - x;
   });
   const max = Math.max(1, ...sorted.map((row) => valueOf(row, sort) ?? 0));
-  const mixed = rows.some((row) => row.jobs > 0) && rows.some((row) => row.holds > 0);
+  const kinds = (["jobs", "holds", "wanted"] as const).filter((kind) => rows.some((row) => row[kind] > 0));
+  const mixed = kinds.length > 1;
   const visible = all ? sorted : sorted.slice(0, FIRST_PAGE);
   const countNote =
     sort === "money"
@@ -91,14 +93,12 @@ export function RankList({ rows, field, filters, empty }: Props) {
         </div>
         {sort === "gigs" && mixed && (
           <p aria-hidden className="flex gap-3 text-xs text-muted">
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-series-1" />
-              Jobs
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-2.5 rounded-sm bg-series-2" />
-              Holds
-            </span>
+            {kinds.map((kind) => (
+              <span key={kind} className="flex items-center gap-1">
+                <span className={`size-2.5 rounded-sm ${["bg-series-1", "bg-series-2", "bg-series-3"][["jobs", "holds", "wanted"].indexOf(kind)]}`} />
+                {kind === "jobs" ? "Jobs" : kind === "holds" ? "Holds" : "Wanted"}
+              </span>
+            ))}
           </p>
         )}
       </div>
@@ -108,7 +108,6 @@ export function RankList({ rows, field, filters, empty }: Props) {
         {visible.map((row) => {
           const value = valueOf(row, sort) ?? 0;
           const width = (value / max) * 100;
-          const jobShare = sort === "gigs" && value > 0 ? row.jobs / value : 1;
           return (
             <li key={row.key}>
               <FilterLink href={withFilter(filters, { [field]: row.key, tab: "overview" })} className="block px-4 py-3 hover:bg-[var(--hover)]">
@@ -117,11 +116,15 @@ export function RankList({ rows, field, filters, empty }: Props) {
                   <span className="shrink-0 font-semibold tabular-nums">{shown(row, sort)}</span>
                 </div>
                 <div aria-hidden className="mt-1.5 flex h-1.5 gap-0.5" style={{ width: `${width}%` }}>
-                  {jobShare > 0 && (
-                    <span className="h-full rounded-full bg-series-1" style={{ flexGrow: jobShare }} />
-                  )}
-                  {jobShare < 1 && (
-                    <span className="h-full rounded-full bg-series-2" style={{ flexGrow: 1 - jobShare }} />
+                  {sort === "gigs" ? (
+                    ([["jobs", "bg-series-1"], ["holds", "bg-series-2"], ["wanted", "bg-series-3"]] as const).map(
+                      ([kind, color]) =>
+                        row[kind] > 0 && (
+                          <span key={kind} className={`h-full rounded-full ${color}`} style={{ flexGrow: row[kind] }} />
+                        ),
+                    )
+                  ) : (
+                    <span className="h-full flex-1 rounded-full bg-series-1" />
                   )}
                 </div>
                 <p className="mt-1.5 truncate text-xs text-muted">{details(row)}</p>

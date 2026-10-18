@@ -215,3 +215,15 @@ describe("normalizeKey", () => {
     expect(normalizeKey("Kallr")).not.toBe(normalizeKey("Kaller"));
   });
 });
+
+describe("wanted keyword", () => {
+  it("reads 'wanted' like job and hold", () => {
+    expect(parseTitle("Kaller wanted 800 boro park")).toMatchObject({
+      ok: true,
+      keyword: "wanted",
+      person: "Kaller",
+      price: 800,
+      location: "boro park",
+    });
+  });
+});

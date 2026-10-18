@@ -1,4 +1,4 @@
-export type TitleKeyword = "job" | "hold";
+export type TitleKeyword = "job" | "hold" | "wanted";
 
 export type ParsedTitle =
   | {
@@ -52,7 +52,7 @@ function tokenize(title: string): Token[] {
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const lower = word.toLowerCase();
-    if (lower === "job" || lower === "hold") {
+    if (lower === "job" || lower === "hold" || lower === "wanted") {
       tokens.push({ kind: "keyword", keyword: lower });
     } else if (lower === "on" && words[i + 1]?.toLowerCase() === "hold") {
       tokens.push({ kind: "keyword", keyword: "hold" });

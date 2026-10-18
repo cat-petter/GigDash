@@ -33,7 +33,7 @@ export type SyncPlan = {
   warnings: string[];
 };
 
-const STATUS: Record<GigCalendar, GigStatus> = { gigs: "job", holds: "hold" };
+const STATUS: Record<GigCalendar, GigStatus> = { gigs: "job", holds: "hold", wanted: "wanted" };
 
 function titleFields(title: string, lexicon: Lexicon) {
   const parsed = parseTitle(title, lexicon);

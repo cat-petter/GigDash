@@ -7,6 +7,7 @@ import {
   inScope,
   isFiltered,
   leadBucket,
+  matchesShow,
   NONE_KEY,
   parseFilters,
   toQuery,
@@ -168,5 +169,16 @@ describe("inScope", () => {
   it("matches gigs with no location to the 'No location' option", () => {
     expect(inScope({ ...row, locationKey: null }, filters({ location: NONE_KEY }), TODAY)).toBe(true);
     expect(inScope(row, filters({ location: NONE_KEY }), TODAY)).toBe(false);
+  });
+});
+
+describe("matchesShow", () => {
+  it("leaves wanted dates out of jobs and holds, and shows them only when asked", () => {
+    const wanted = { ...row, status: "wanted" as const };
+    expect(matchesShow(row, "all")).toBe(true);
+    expect(matchesShow(wanted, "all")).toBe(false);
+    expect(matchesShow(wanted, "wanted")).toBe(true);
+    expect(matchesShow(row, "wanted")).toBe(false);
+    expect(parseFilters({ show: "wanted" }).show).toBe("wanted");
   });
 });

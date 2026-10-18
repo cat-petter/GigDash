@@ -19,13 +19,17 @@ export type FetchedCalendar = {
 
 type Env = Record<string, string | undefined>;
 
-export type CalendarNames = { gigs: string; holds: string | null };
+export type CalendarNames = { gigs: string; holds: string | null; wanted: string };
 
-/** The calendar names from the environment. An empty HOLDS_CALENDAR means there is no holds calendar yet. */
+/**
+ * The calendar names from the environment. An empty HOLDS_CALENDAR means there is no holds calendar yet.
+ * The wanted calendar (dates he was asked for but wasn't free) is read only if it exists.
+ */
 export function calendarNames(env: Env = process.env): CalendarNames {
   return {
     gigs: env.GIGS_CALENDAR?.trim() || "Gigs",
     holds: env.HOLDS_CALENDAR?.trim() || null,
+    wanted: env.WANTED_CALENDAR?.trim() || "Wanted",
   };
 }
 
@@ -96,7 +100,7 @@ export async function listCalendarNames(): Promise<string[]> {
 }
 
 /**
- * Fetches every event in the gigs and holds calendars, found by name.
+ * Fetches every event in the gigs, holds and wanted calendars, found by name.
  * No other calendar's events are requested.
  */
 export async function fetchGigCalendars(names: CalendarNames = calendarNames()): Promise<FetchedCalendar[]> {
@@ -112,6 +116,16 @@ export async function fetchGigCalendars(names: CalendarNames = calendarNames()):
       throw new Error("GIGS_CALENDAR and HOLDS_CALENDAR name the same calendar");
     }
     wanted.push({ calendar: "holds", dav: holds });
+  }
+  const asked = calendars.filter((calendar) => nameOf(calendar).toLowerCase() === names.wanted.toLowerCase());
+  if (asked.length > 1) {
+    throw new Error(`There are ${asked.length} calendars named "${names.wanted}". Rename one so WANTED_CALENDAR is unambiguous.`);
+  }
+  if (asked.length === 1) {
+    if (wanted.some(({ dav }) => dav.url === asked[0].url)) {
+      throw new Error("WANTED_CALENDAR names the same calendar as GIGS_CALENDAR or HOLDS_CALENDAR");
+    }
+    wanted.push({ calendar: "wanted", dav: asked[0] });
   }
 
   return Promise.all(

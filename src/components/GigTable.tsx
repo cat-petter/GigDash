@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { type Day, dayToDate } from "@/lib/dates";
+import type { Status } from "@/lib/filters";
 import { formatMoney } from "@/lib/format";
 import { Card } from "./Card";
 
@@ -13,8 +14,10 @@ export type GigListItem = {
   location: string | null;
   price: number | null;
   leadDays: number | null;
-  status: "job" | "hold";
+  status: Status;
 };
+
+const SLOT: Record<Status, number> = { job: 1, hold: 2, wanted: 3 };
 
 type SortKey = "date" | "person" | "price" | "lead";
 const FIRST_PAGE = 20;
@@ -103,11 +106,11 @@ export function GigTable({ gigs }: { gigs: GigListItem[] }) {
                     <span
                       aria-hidden
                       className="mt-1.5 size-2 shrink-0 rounded-[2px]"
-                      style={{ background: gig.status === "job" ? "var(--series-1)" : "var(--series-2)" }}
+                      style={{ background: `var(--series-${SLOT[gig.status]})` }}
                     />
                     <span className="min-w-0 break-words">
                       {gig.person ?? <span className="text-muted italic">{gig.title}</span>}
-                      {gig.status === "hold" && <span className="text-muted"> · hold</span>}
+                      {gig.status !== "job" && <span className="text-muted"> · {gig.status}</span>}
                     </span>
                   </span>
                   {gig.location && <span className="block pl-3.5 text-xs text-muted">{gig.location}</span>}

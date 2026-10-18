@@ -197,17 +197,17 @@ describe("people and places", () => {
       person("Kaller", { price: 900, deleted: true }),
     ]);
     expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, dollars: 600, unpriced: 1, leadMedian: 30 },
-      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, dollars: 500, unpriced: 0, leadMedian: 10 },
+      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, wanted: 0, dollars: 600, unpriced: 1, leadMedian: 30 },
+      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, wanted: 0, dollars: 500, unpriced: 0, leadMedian: 10 },
     ]);
     expect(places).toHaveLength(1);
-    expect(places[0]).toMatchObject({ key: "neemas hachaim", jobs: 3, holds: 1, dollars: 1100 });
+    expect(places[0]).toMatchObject({ key: "neemas hachaim", jobs: 3, holds: 1, wanted: 0, dollars: 1100 });
   });
 
   it("follows the jobs/holds filter and gives no lead time when there's none", () => {
     const { people } = stats([gig(), hold({ leadDays: null })], { show: "hold" });
     expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, dollars: 0, unpriced: 0, leadMedian: null },
+      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, wanted: 0, dollars: 0, unpriced: 0, leadMedian: null },
     ]);
   });
 
@@ -224,7 +224,7 @@ describe("countsByPeriod", () => {
       to: "2026-12-31",
     });
     expect(periods).toHaveLength(12);
-    expect(periods[2]).toEqual({ key: "2026-03", label: "Mar", full: "March 2026", jobs: 1, holds: 1 });
+    expect(periods[2]).toEqual({ key: "2026-03", label: "Mar", full: "March 2026", jobs: 1, holds: 1, wanted: 0 });
     expect(periods[0]).toMatchObject({ jobs: 0, holds: 0 });
   });
 
@@ -292,5 +292,28 @@ describe("needsAttention", () => {
     expect(attention.unpriced).toEqual([unpriced]);
     expect(attention.mismatched).toEqual([mismatched]);
     expect(attention.recurring).toEqual([recurring]);
+  });
+});
+
+describe("wanted", () => {
+  const wanted = (overrides: Partial<GigRow> = {}) =>
+    gig({ status: "wanted", titleKeyword: null, price: 800, ...overrides });
+
+  it("counts wanted dates on their own, out of jobs, money and charts", () => {
+    const rows = [gig({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-04-01" })];
+    const stats = computeStats(rows, DEFAULT_FILTERS, TODAY);
+    expect(stats.tiles).toMatchObject({ jobs: 1, earned: 600, openHolds: 0, wanted: 2 });
+    expect(stats.gigs).toHaveLength(1);
+    expect(stats.byPeriod.reduce((total, period) => total + period.wanted, 0)).toBe(0);
+  });
+
+  it("counts toward who asks most, and shows alone when filtered to", () => {
+    const rows = [gig(), wanted({ person: "Weiss", personKey: "weiss" }), wanted({ person: "Weiss", personKey: "weiss" })];
+    const all = computeStats(rows, DEFAULT_FILTERS, TODAY);
+    expect(all.people[0]).toMatchObject({ key: "weiss", jobs: 0, wanted: 2, dollars: 0 });
+    const only = computeStats(rows, { ...DEFAULT_FILTERS, show: "wanted" }, TODAY);
+    expect(only.gigs).toHaveLength(2);
+    expect(only.people.map((person) => person.key)).toEqual(["weiss"]);
+    expect(only.tiles.jobs).toBe(1);
   });
 });

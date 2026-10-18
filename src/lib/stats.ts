@@ -7,14 +7,15 @@ import {
   matchesShow,
   NONE_KEY,
   type Filters,
+  type Status,
 } from "./filters";
 
 /** One gig, as the dashboard needs it. */
 export type GigRow = {
   uid: string;
   title: string;
-  status: "job" | "hold";
-  titleKeyword: "job" | "hold" | null;
+  status: Status;
+  titleKeyword: Status | null;
   person: string | null;
   personKey: string | null;
   price: number | null;
@@ -33,14 +34,16 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** Past this many months, "by month" becomes "by year". */
 const MAX_MONTHS = 36;
 
-export type PeriodCount = { key: string; label: string; full: string; jobs: number; holds: number };
-export type LeadBar = { key: string; label: string; jobs: number; holds: number };
+export type PeriodCount = { key: string; label: string; full: string; jobs: number; holds: number; wanted: number };
+export type LeadBar = { key: string; label: string; jobs: number; holds: number; wanted: number };
 /** One person or place on the People and Places tabs. */
 export type Ranked = {
   key: string;
   label: string;
   jobs: number;
   holds: number;
+  /** Times he was asked but wasn't free. */
+  wanted: number;
   /** From priced jobs only. */
   dollars: number;
   unpriced: number;
@@ -120,13 +123,16 @@ function ranked(groups: Group[]): Ranked[] {
         key: group.key,
         label: group.label,
         jobs: jobs.length,
-        holds: group.rows.length - jobs.length,
+        holds: group.rows.filter((row) => row.status === "hold").length,
+        wanted: group.rows.filter((row) => row.status === "wanted").length,
         dollars: sum(jobs),
         unpriced: jobs.filter((row) => row.price === null).length,
         leadMedian: median(group.rows.filter(hasLead).map((row) => row.leadDays)),
       };
     })
-    .sort((a, b) => b.jobs + b.holds - (a.jobs + a.holds) || b.jobs - a.jobs || byLabel(a, b));
+    .sort(
+      (a, b) => b.jobs + b.holds + b.wanted - (a.jobs + a.holds + a.wanted) || b.jobs - a.jobs || byLabel(a, b),
+    );
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -152,7 +158,7 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
   const periods: PeriodCount[] = [];
   if (yearly) {
     for (let year = startYear; year <= endYear; year++) {
-      periods.push({ key: String(year), label: String(year), full: String(year), jobs: 0, holds: 0 });
+      periods.push({ key: String(year), label: String(year), full: String(year), jobs: 0, holds: 0, wanted: 0 });
     }
   } else {
     for (let i = 0; i < months; i++) {
@@ -164,6 +170,7 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
         full: `${LONG_MONTHS[month]} ${year}`,
         jobs: 0,
         holds: 0,
+        wanted: 0,
       });
     }
   }
@@ -173,7 +180,8 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
     const period = periods[index.get(yearly ? row.gigDate.slice(0, 4) : row.gigDate.slice(0, 7)) ?? -1];
     if (!period) continue;
     if (row.status === "job") period.jobs += 1;
-    else period.holds += 1;
+    else if (row.status === "hold") period.holds += 1;
+    else period.wanted += 1;
   }
   return periods;
 }
@@ -190,8 +198,10 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
   const bounds = dateBounds(filters, today);
   const live = rows.filter((row) => !row.deleted);
   // Tiles cover both jobs and holds, so they ignore the jobs/holds filter.
-  const scoped = live.filter((row) => inScope(row, filters, today));
-  const shown = scoped.filter((row) => matchesShow(row, filters.show));
+  const inRange = live.filter((row) => inScope(row, filters, today));
+  const scoped = inRange.filter((row) => row.status !== "wanted");
+  const wanted = inRange.filter((row) => row.status === "wanted");
+  const shown = inRange.filter((row) => matchesShow(row, filters.show));
 
   const jobs = scoped.filter((row) => row.status === "job");
   const pastJobs = jobs.filter((row) => row.gigDate < today);
@@ -232,6 +242,8 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
       leadCounted: leads.length,
       /** Shown gigs without a usable lead time (unknown booking date, or entered after the gig). */
       leadMissing: shown.length - leads.length,
+      /** Dates he was asked for but wasn't free. */
+      wanted: wanted.length,
     },
     leadHistogram: LEAD_BUCKETS.map(
       (bucket): LeadBar => ({
@@ -239,11 +251,13 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
         label: bucket.label,
         jobs: withLead.filter((row) => row.status === "job" && leadBucket(row.leadDays) === bucket.key).length,
         holds: withLead.filter((row) => row.status === "hold" && leadBucket(row.leadDays) === bucket.key).length,
+        wanted: withLead.filter((row) => row.status === "wanted" && leadBucket(row.leadDays) === bucket.key).length,
       }),
     ),
     byPeriod: countsByPeriod(shown, bounds),
-    people: ranked(byPerson(shown)),
-    places: ranked(byLocation(shown)),
+    // Wanted dates count toward who asks most, unless the view is only jobs or only holds.
+    people: ranked(byPerson(filters.show === "all" ? inRange : shown)),
+    places: ranked(byLocation(filters.show === "all" ? inRange : shown)),
     /** The gig list, latest first. */
     gigs: [...shown].sort((a, b) => b.gigDate.localeCompare(a.gigDate)),
   };

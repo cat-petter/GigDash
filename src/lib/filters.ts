@@ -1,7 +1,9 @@
 import { addDays, isDay, type Day } from "./dates";
 
 export type RangeKey = "year" | "12m" | "all" | "custom";
-export type ShowKey = "all" | "job" | "hold";
+/** Which calendar a gig is in. "wanted" means he was asked but wasn't free. */
+export type Status = "job" | "hold" | "wanted";
+export type ShowKey = "all" | Status;
 export type LeadKey = "lt1w" | "1to4w" | "1to3m" | "3m";
 export type TabKey = "overview" | "people" | "places" | "gigs";
 
@@ -23,6 +25,7 @@ export const SHOW: { key: ShowKey; label: string }[] = [
   { key: "all", label: "Jobs and holds" },
   { key: "job", label: "Jobs" },
   { key: "hold", label: "Holds" },
+  { key: "wanted", label: "Wanted (not free)" },
 ];
 
 /** Lead-time buckets, in days. `max` is inclusive; null means no upper limit. */
@@ -153,7 +156,7 @@ export function leadBucket(days: number | null): LeadKey | null {
 }
 
 type Filterable = {
-  status: "job" | "hold";
+  status: Status;
   personKey: string | null;
   locationKey: string | null;
   gigDate: Day;
@@ -171,6 +174,7 @@ export function inScope(row: Filterable, filters: Filters, today: Day): boolean 
   return true;
 }
 
+/** "all" means jobs and holds; wanted dates only show when asked for. */
 export function matchesShow(row: Filterable, show: ShowKey): boolean {
-  return show === "all" || row.status === show;
+  return show === "all" ? row.status !== "wanted" : row.status === show;
 }

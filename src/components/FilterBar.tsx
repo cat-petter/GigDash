@@ -202,7 +202,7 @@ export function FilterBar({ filters, people, locations }: Props) {
               </option>
             ))}
           </Field>
-          <Field label="Jobs or holds" value={filters.show} onChange={(value) => go({ show: value as ShowKey })}>
+          <Field label="Show" value={filters.show} onChange={(value) => go({ show: value as ShowKey })}>
             {SHOW.map((show) => (
               <option key={show.key} value={show.key}>
                 {show.label}
@@ -235,7 +235,7 @@ export function FilterBar({ filters, people, locations }: Props) {
             </Chip>
           )}
           {filters.show !== DEFAULT_FILTERS.show && (
-            <Chip href={withFilter(filters, { show: DEFAULT_FILTERS.show })}>{filters.show === "job" ? "Only jobs" : "Only holds"}</Chip>
+            <Chip href={withFilter(filters, { show: DEFAULT_FILTERS.show })}>{filters.show === "job" ? "Only jobs" : filters.show === "hold" ? "Only holds" : "Only wanted"}</Chip>
           )}
           {filters.lead && (
             <Chip href={withFilter(filters, { lead: null })}>

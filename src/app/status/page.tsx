@@ -61,6 +61,8 @@ async function Calendars() {
               <Badge tone="good">Read as jobs</Badge>
             ) : same(name, names.holds) ? (
               <Badge tone="good">Read as holds</Badge>
+            ) : same(name, names.wanted) ? (
+              <Badge tone="good">Read as wanted</Badge>
             ) : (
               <Badge tone="muted">Not read</Badge>
             )}
@@ -72,6 +74,11 @@ async function Calendars() {
           {problem}
         </p>
       ))}
+      {!found.some((name) => same(name, names.wanted)) && (
+        <p className="mt-2 text-sm text-muted">
+          No &ldquo;{names.wanted}&rdquo; calendar yet. Make one to track dates you were asked for but weren&apos;t free.
+        </p>
+      )}
       {!names.holds && (
         <p className="mt-2 text-sm text-warn">
           HOLDS_CALENDAR isn&apos;t set, so holds aren&apos;t tracked. Set it once you&apos;ve made the holds calendar.
@@ -166,7 +173,7 @@ export default async function StatusPage() {
 
       <Card
         title="Calendars"
-        note={`This app reads only "${names.gigs}"${names.holds ? ` and "${names.holds}"` : ""}. It never changes anything in your calendar.`}
+        note={`This app reads only "${names.gigs}"${names.holds ? `, "${names.holds}"` : ""} and "${names.wanted}" if it exists. It never changes anything in your calendar.`}
       >
         <Suspense fallback={<p className="text-sm text-muted">Checking iCloud…</p>}>
           <Calendars />

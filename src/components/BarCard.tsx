@@ -10,7 +10,7 @@ export type Series = {
   /** "job" / "jobs", for tooltips and the table header. */
   one: string;
   many: string;
-  color: "var(--series-1)" | "var(--series-2)";
+  color: "var(--series-1)" | "var(--series-2)" | "var(--series-3)";
 };
 
 export type BarRow = {

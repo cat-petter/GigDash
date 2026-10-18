@@ -10,11 +10,14 @@ datasource db {
 enum GigCalendar {
   gigs
   holds
+  wanted
 }
 
 enum GigStatus {
   job
   hold
+  /// He was asked but wasn't available.
+  wanted
 }
 
 model Gig {

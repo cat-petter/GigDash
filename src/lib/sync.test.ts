@@ -90,6 +90,11 @@ describe("planSync", () => {
       expect(row.leadDays).toBe(-5);
     });
 
+    it("reads the wanted calendar as wanted dates", () => {
+      const [row] = sync([event({ calendar: "wanted", title: "Kaller wanted 800 boro park" })], []).create;
+      expect(row).toMatchObject({ status: "wanted", titleKeyword: "wanted", person: "Kaller", price: 800, heldAt: null });
+    });
+
     it("creates a hold that was held from when it was entered", () => {
       const [row] = sync([event({ calendar: "holds", title: "Kaller hold" })], []).create;
       expect(row).toMatchObject({
