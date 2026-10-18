@@ -6,6 +6,7 @@ import { FilterBar } from "@/components/FilterBar";
 import { GigTable } from "@/components/GigTable";
 import { NeedsAttention } from "@/components/NeedsAttention";
 import { FilterLink, PendingFrame, PendingProvider } from "@/components/Pending";
+import { PersonProfile } from "@/components/PersonProfile";
 import { RankList } from "@/components/RankList";
 import { StatTile } from "@/components/StatTile";
 import { SyncButton } from "@/components/SyncButton";
@@ -17,7 +18,7 @@ import { formatMoney, plural } from "@/lib/format";
 import { loadGigRows } from "@/lib/gigs";
 import { autoSync, syncStatus } from "@/lib/run-sync";
 import { requireLogin } from "@/lib/session";
-import { computeStats, filterOptions, needsAttention, type PeriodCount } from "@/lib/stats";
+import { computeStats, filterOptions, needsAttention, type PeriodCount, personProfile } from "@/lib/stats";
 
 const JOBS: Series = { key: "jobs", one: "job", many: "jobs", color: "var(--series-1)" };
 const HOLDS: Series = { key: "holds", one: "hold", many: "holds", color: "var(--series-2)" };
@@ -111,6 +112,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   const options = filterOptions(rows);
   const attention = needsAttention(rows);
   const { tiles } = stats;
+  const profile = personProfile(rows, filters, today);
 
   const countSeries =
     filters.show === "job" ? [JOBS] : filters.show === "hold" ? [HOLDS] : filters.show === "wanted" ? [WANTED] : [JOBS, HOLDS];
@@ -119,6 +121,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
 
   const overview = (
     <>
+      {profile && <PersonProfile profile={profile} />}
       <div className="grid grid-cols-2 gap-3">
         <StatTile
           label="Upcoming jobs"

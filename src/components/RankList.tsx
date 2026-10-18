@@ -6,10 +6,11 @@ import { formatMoney, plural } from "@/lib/format";
 import type { Ranked } from "@/lib/stats";
 import { FilterLink } from "./Pending";
 
-type SortKey = "gigs" | "money" | "lead";
+type SortKey = "gigs" | "money" | "price" | "lead";
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "gigs", label: "Gigs" },
   { key: "money", label: "Money" },
+  { key: "price", label: "Usual price" },
   { key: "lead", label: "Lead time" },
 ];
 const FIRST_PAGE = 10;
@@ -17,13 +18,14 @@ const FIRST_PAGE = 10;
 function valueOf(row: Ranked, sort: SortKey): number | null {
   if (sort === "gigs") return row.jobs + row.holds + row.wanted;
   if (sort === "money") return row.dollars > 0 ? row.dollars : null;
+  if (sort === "price") return row.typicalPrice;
   return row.leadMedian;
 }
 
 function shown(row: Ranked, sort: SortKey): string {
   const value = valueOf(row, sort);
   if (value === null) return "—";
-  if (sort === "money") return formatMoney(value);
+  if (sort === "money" || sort === "price") return formatMoney(value);
   if (sort === "lead") return plural(Math.round(value), "day");
   return value.toLocaleString("en-US");
 }
@@ -32,7 +34,8 @@ function details(row: Ranked): string {
   const parts = [plural(row.jobs, "job")];
   if (row.holds) parts.push(plural(row.holds, "hold"));
   if (row.wanted) parts.push(`${row.wanted} wanted`);
-  if (row.dollars) parts.push(formatMoney(row.dollars));
+  if (row.typicalPrice !== null) parts.push(`usually ${formatMoney(row.typicalPrice)}`);
+  if (row.dollars) parts.push(`${formatMoney(row.dollars)} in all`);
   if (row.leadMedian !== null) parts.push(`booked ${plural(Math.round(row.leadMedian), "day")} ahead`);
   return parts.join(" · ");
 }
@@ -68,6 +71,8 @@ export function RankList({ rows, field, filters, empty }: Props) {
   const countNote =
     sort === "money"
       ? "From jobs with a price."
+      : sort === "price"
+        ? "What they usually pay (median of priced jobs)."
       : sort === "lead"
         ? "Median days between booking and the gig."
         : null;

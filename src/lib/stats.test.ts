@@ -8,6 +8,7 @@ import {
   type GigRow,
   median,
   needsAttention,
+  personProfile,
 } from "./stats";
 
 const TODAY = "2026-09-24";
@@ -197,8 +198,8 @@ describe("people and places", () => {
       person("Kaller", { price: 900, deleted: true }),
     ]);
     expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, wanted: 0, dollars: 600, unpriced: 1, leadMedian: 30 },
-      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, wanted: 0, dollars: 500, unpriced: 0, leadMedian: 10 },
+      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, wanted: 0, dollars: 600, typicalPrice: 600, unpriced: 1, leadMedian: 30 },
+      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, wanted: 0, dollars: 500, typicalPrice: 500, unpriced: 0, leadMedian: 10 },
     ]);
     expect(places).toHaveLength(1);
     expect(places[0]).toMatchObject({ key: "neemas hachaim", jobs: 3, holds: 1, wanted: 0, dollars: 1100 });
@@ -207,7 +208,7 @@ describe("people and places", () => {
   it("follows the jobs/holds filter and gives no lead time when there's none", () => {
     const { people } = stats([gig(), hold({ leadDays: null })], { show: "hold" });
     expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, wanted: 0, dollars: 0, unpriced: 0, leadMedian: null },
+      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, wanted: 0, dollars: 0, typicalPrice: null, unpriced: 0, leadMedian: null },
     ]);
   });
 
@@ -315,5 +316,36 @@ describe("wanted", () => {
     expect(only.gigs).toHaveLength(2);
     expect(only.people.map((person) => person.key)).toEqual(["weiss"]);
     expect(only.tiles.jobs).toBe(1);
+  });
+});
+
+describe("personProfile", () => {
+  it("gives a person's usual price, range, totals and dates", () => {
+    const rows = [
+      gig({ price: 500, gigDate: "2026-02-01" }),
+      gig({ price: 600, gigDate: "2026-05-01", location: "Boro Park", locationKey: "boro park" }),
+      gig({ price: 900, gigDate: "2026-10-01" }),
+      gig({ price: null, gigDate: "2026-11-01" }),
+      gig({ person: "Weiss", personKey: "weiss", price: 2000 }),
+      gig({ status: "wanted", titleKeyword: null, gigDate: "2026-07-01" }),
+    ];
+    const profile = personProfile(rows, { ...DEFAULT_FILTERS, person: "kaller", show: "hold" }, TODAY)!;
+    expect(profile).toMatchObject({
+      label: "Kaller",
+      jobs: 4,
+      played: 2,
+      upcomingJobs: 2,
+      typicalPrice: 600,
+      lowPrice: 500,
+      highPrice: 900,
+      priced: 3,
+      earned: 1100,
+      upcoming: 900,
+      lastGig: "2026-05-01",
+      nextGig: "2026-10-01",
+      wanted: 1,
+    });
+    expect(profile.topPlaces[0]).toEqual({ label: "neemas hachaim", jobs: 3 });
+    expect(personProfile(rows, DEFAULT_FILTERS, TODAY)).toBeNull();
   });
 });

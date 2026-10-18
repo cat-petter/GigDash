@@ -46,6 +46,8 @@ export type Ranked = {
   wanted: number;
   /** From priced jobs only. */
   dollars: number;
+  /** Median price of their priced jobs. */
+  typicalPrice: number | null;
   unpriced: number;
   /** Median days booked ahead, or null when none of their gigs has a booking date. */
   leadMedian: number | null;
@@ -126,6 +128,7 @@ function ranked(groups: Group[]): Ranked[] {
         holds: group.rows.filter((row) => row.status === "hold").length,
         wanted: group.rows.filter((row) => row.status === "wanted").length,
         dollars: sum(jobs),
+        typicalPrice: median(jobs.flatMap((row) => (row.price === null ? [] : [row.price]))),
         unpriced: jobs.filter((row) => row.price === null).length,
         leadMedian: median(group.rows.filter(hasLead).map((row) => row.leadDays)),
       };
@@ -264,6 +267,71 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
 }
 
 export type Stats = ReturnType<typeof computeStats>;
+
+/** Everything about one person who hires him, for the card at the top of their Overview. */
+export type Profile = {
+  label: string;
+  jobs: number;
+  played: number;
+  upcomingJobs: number;
+  /** Median price of their priced jobs, or null when none has a price. */
+  typicalPrice: number | null;
+  averagePrice: number | null;
+  lowPrice: number | null;
+  highPrice: number | null;
+  priced: number;
+  earned: number;
+  upcoming: number;
+  leadMedian: number | null;
+  lastGig: Day | null;
+  nextGig: Day | null;
+  openHolds: number;
+  holdRate: number | null;
+  wanted: number;
+  /** Where they book him most, by jobs. */
+  topPlaces: { label: string; jobs: number }[];
+};
+
+/**
+ * One person's numbers in the chosen dates (and place, if one is picked).
+ * Ignores the Show and Booked-ahead filters so the card always shows the whole picture.
+ */
+export function personProfile(rows: GigRow[], filters: Filters, today: Day): Profile | null {
+  if (!filters.person) return null;
+  const all = computeStats(rows, { ...filters, show: "all", lead: null }, today);
+  const person = all.people.find((row) => row.key === filters.person);
+  const mine = rows.filter(
+    (row) => !row.deleted && inScope(row, { ...filters, lead: null }, today),
+  );
+  const jobs = mine.filter((row) => row.status === "job");
+  const prices = jobs.flatMap((row) => (row.price === null ? [] : [row.price]));
+  const past = jobs.filter((row) => row.gigDate < today).map((row) => row.gigDate).sort();
+  const future = jobs.filter((row) => row.gigDate >= today).map((row) => row.gigDate).sort();
+  const label = person?.label ?? mine[0]?.person ?? (filters.person === NONE_KEY ? "No name" : filters.person);
+  return {
+    label,
+    jobs: jobs.length,
+    played: past.length,
+    upcomingJobs: future.length,
+    typicalPrice: median(prices),
+    averagePrice: average(prices),
+    lowPrice: prices.length ? Math.min(...prices) : null,
+    highPrice: prices.length ? Math.max(...prices) : null,
+    priced: prices.length,
+    earned: all.tiles.earned,
+    upcoming: all.tiles.upcoming,
+    leadMedian: median(mine.filter((row) => row.status !== "wanted").filter(hasLead).map((row) => row.leadDays)),
+    lastGig: past.at(-1) ?? null,
+    nextGig: future[0] ?? null,
+    openHolds: all.tiles.openHolds,
+    holdRate: all.tiles.holdRate,
+    wanted: all.tiles.wanted,
+    topPlaces: ranked(byLocation(jobs))
+      .filter((place) => place.key !== NONE_KEY)
+      .slice(0, 3)
+      .map((place) => ({ label: place.label, jobs: place.jobs })),
+  };
+}
 
 export type FilterOption = { key: string; label: string; count: number };
 
