@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearedFilters,
   DEFAULT_FILTERS,
   type Filters,
   dateBounds,
@@ -7,6 +8,7 @@ import {
   inScope,
   isFiltered,
   leadBucket,
+  monthEnd,
   NONE_KEY,
   parseFilters,
   toQuery,
@@ -46,7 +48,7 @@ describe("leadBucket", () => {
 });
 
 describe("parseFilters", () => {
-  it("defaults to this year and everyone", () => {
+  it("defaults to all time, everyone, and the Overview tab", () => {
     expect(parseFilters({})).toEqual(DEFAULT_FILTERS);
   });
 
@@ -59,6 +61,10 @@ describe("parseFilters", () => {
         person: "kaller",
         location: NONE_KEY,
         lead: "1to3m",
+        tab: "gigs",
+        when: "past",
+        show: "hold",
+        sort: "lead-desc",
       }),
     ).toEqual({
       range: "custom",
@@ -67,11 +73,17 @@ describe("parseFilters", () => {
       person: "kaller",
       location: NONE_KEY,
       lead: "1to3m",
+      tab: "gigs",
+      when: "past",
+      show: "hold",
+      sort: "lead-desc",
     });
   });
 
   it("falls back to defaults for values it doesn't know", () => {
-    expect(parseFilters({ range: "forever", lead: "soon", person: "  " })).toEqual(DEFAULT_FILTERS);
+    expect(
+      parseFilters({ range: "forever", lead: "soon", person: "  ", tab: "people", when: "soon", sort: "name" }),
+    ).toEqual(DEFAULT_FILTERS);
   });
 
   it("takes the first of repeated parameters", () => {
@@ -90,7 +102,7 @@ describe("parseFilters", () => {
   });
 
   it("ignores from and to unless the range is custom", () => {
-    expect(parseFilters({ range: "all", from: "2026-01-01" }).from).toBeNull();
+    expect(parseFilters({ range: "year", from: "2026-01-01" }).from).toBeNull();
   });
 });
 
@@ -102,7 +114,15 @@ describe("toQuery and withFilter", () => {
   });
 
   it("round-trips through parseFilters", () => {
-    const original = filters({ range: "custom", from: "2025-01-01", person: "reb yossi", lead: "3m" });
+    const original = filters({
+      range: "custom",
+      from: "2025-01-01",
+      person: "reb yossi",
+      lead: "3m",
+      tab: "gigs",
+      when: "all",
+      sort: "price-desc",
+    });
     const query = toQuery(original);
     expect(parseFilters(Object.fromEntries(new URLSearchParams(query)))).toEqual(original);
   });
@@ -112,18 +132,31 @@ describe("toQuery and withFilter", () => {
   });
 
   it("drops custom dates when switching to another range", () => {
-    expect(withFilter(filters({ range: "custom", from: "2025-01-01" }), { range: "all" })).toBe("/?range=all");
+    expect(withFilter(filters({ range: "custom", from: "2025-01-01" }), { range: "year" })).toBe("/?range=year");
+  });
+
+  it("doesn't count the tab or the Gigs tab's own choices as filters", () => {
+    expect(isFiltered(filters({ tab: "gigs", when: "all", show: "job", sort: "lead" }))).toBe(false);
+    expect(isFiltered(filters({ range: "month" }))).toBe(true);
+  });
+
+  it("clears the shared filters but stays on the tab", () => {
+    expect(clearedFilters(filters({ tab: "gigs", person: "kaller", when: "past" }))).toEqual(filters({ tab: "gigs" }));
   });
 
   it("counts the filters besides the dates", () => {
-    expect(extraFilterCount(filters({ range: "all" }))).toBe(0);
+    expect(extraFilterCount(filters({ range: "year" }))).toBe(0);
     expect(extraFilterCount(filters({ person: "kaller", location: "x", lead: "3m" }))).toBe(3);
   });
 });
 
 describe("dateBounds", () => {
   it("covers the whole of this year, including gigs still to come", () => {
-    expect(dateBounds(filters(), TODAY)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+    expect(dateBounds(filters({ range: "year" }), TODAY)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  });
+
+  it("covers the whole of this month", () => {
+    expect(dateBounds(filters({ range: "month" }), TODAY)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
   });
 
   it("covers the last 365 days up to today", () => {
@@ -136,6 +169,14 @@ describe("dateBounds", () => {
       from: "2026-03-01",
       to: null,
     });
+  });
+});
+
+describe("monthEnd", () => {
+  it("knows how long each month is", () => {
+    expect(monthEnd("2026-02")).toBe("2026-02-28");
+    expect(monthEnd("2028-02")).toBe("2028-02-29");
+    expect(monthEnd("2026-12")).toBe("2026-12-31");
   });
 });
 

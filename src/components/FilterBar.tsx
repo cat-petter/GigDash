@@ -2,12 +2,14 @@
 
 import { type FormEvent, type ReactNode, useState } from "react";
 import {
+  clearedFilters,
   DEFAULT_FILTERS,
   extraFilterCount,
   type Filters,
   isFiltered,
   LEAD_BUCKETS,
   type LeadKey,
+  monthEnd,
   RANGES,
   type RangeKey,
   withFilter,
@@ -31,6 +33,19 @@ const chevron = (
 function withCurrent(options: FilterOption[], current: string | null): FilterOption[] {
   if (!current || options.some((option) => option.key === current)) return options;
   return [...options, { key: current, label: current, count: 0 }];
+}
+
+/** "March 2026" or "2026" when custom dates cover exactly that, as a chart bar leaves them. */
+function wholePeriod(filters: Filters): string | null {
+  const { from, to } = filters;
+  if (filters.range !== "custom" || !from || !to) return null;
+  if (from.endsWith("-01-01") && to === `${from.slice(0, 4)}-12-31`) return from.slice(0, 4);
+  if (from.endsWith("-01") && to === monthEnd(from.slice(0, 7))) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(
+      new Date(`${from}T00:00:00Z`),
+    );
+  }
+  return null;
 }
 
 /** A labeled native select, so the phone opens its own picker. */
@@ -83,7 +98,9 @@ export function FilterBar({ filters, people, locations }: Props) {
   const [open, setOpen] = useState(false);
   // "Custom dates" shows the date fields; the range changes once they're applied.
   const [customChosen, setCustomChosen] = useState(false);
-  const customOpen = customChosen || filters.range === "custom";
+  const period = wholePeriod(filters);
+  const customOpen = customChosen || (filters.range === "custom" && !period);
+  const rangeValue = customOpen ? "custom" : period ? "period" : filters.range;
   const go = (change: Partial<Filters>) => navigate(withFilter(filters, change), { scroll: false });
   const nameOf = (options: { key: string; label: string }[], key: string) =>
     options.find((option) => option.key === key)?.label ?? key;
@@ -115,14 +132,19 @@ export function FilterBar({ filters, people, locations }: Props) {
             filters.range !== DEFAULT_FILTERS.range ? "border-accent font-medium" : "border-line"
           }`}
         >
-          <span className="truncate">{nameOf(RANGES, customOpen ? "custom" : filters.range)}</span>
+          <span className="truncate">{rangeValue === "period" ? period : nameOf(RANGES, rangeValue)}</span>
           {chevron}
           <select
             aria-label="Dates"
-            value={customOpen ? "custom" : filters.range}
+            value={rangeValue}
             onChange={(event) => onRange(event.target.value)}
             className="absolute inset-0 cursor-pointer appearance-none opacity-0"
           >
+            {period && (
+              <option value="period" hidden>
+                {period}
+              </option>
+            )}
             {RANGES.map((range) => (
               <option key={range.key} value={range.key}>
                 {range.label}
@@ -146,7 +168,7 @@ export function FilterBar({ filters, people, locations }: Props) {
         </button>
         {isFiltered(filters) && (
           <FilterLink
-            href={withFilter(DEFAULT_FILTERS, {})}
+            href={withFilter(clearedFilters(filters), {})}
             scroll={false}
             onClick={() => setCustomChosen(false)}
             className="ml-auto px-1 text-sm text-accent"
@@ -201,7 +223,7 @@ export function FilterBar({ filters, people, locations }: Props) {
             ))}
           </Field>
           <Field
-            label="Booked ahead"
+            label="Lead time"
             value={filters.lead ?? ""}
             onChange={(value) => go({ lead: (value || null) as LeadKey | null })}
           >
@@ -227,7 +249,7 @@ export function FilterBar({ filters, people, locations }: Props) {
           )}
           {filters.lead && (
             <Chip href={withFilter(filters, { lead: null })}>
-              Booked {nameOf(LEAD_BUCKETS, filters.lead).toLowerCase()} ahead
+              Lead time {nameOf(LEAD_BUCKETS, filters.lead).toLowerCase()}
             </Chip>
           )}
         </div>

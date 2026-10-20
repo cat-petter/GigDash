@@ -1,15 +1,49 @@
 import { addDays, isDay, type Day } from "./dates";
 
-export type RangeKey = "year" | "12m" | "all" | "custom";
+export type RangeKey = "all" | "month" | "year" | "12m" | "custom";
 /** Which calendar a gig is in. "wanted" means he was asked but wasn't free. */
 export type Status = "job" | "hold" | "wanted";
 export type LeadKey = "lt1w" | "1to4w" | "1to3m" | "3m";
+export type TabKey = "overview" | "gigs";
+/** Gigs tab: which gigs by date. */
+export type WhenKey = "upcoming" | "past" | "all";
+/** Gigs tab: booked and on hold together, or one calendar. */
+export type ShowKey = "gigs" | Status;
+export type SortKey = "date" | "date-desc" | "lead" | "lead-desc" | "price-desc" | "price";
 
 export const RANGES: { key: RangeKey; label: string }[] = [
+  { key: "all", label: "All time" },
+  { key: "month", label: "This month" },
   { key: "year", label: "This year" },
   { key: "12m", label: "Last 12 months" },
-  { key: "all", label: "All time" },
   { key: "custom", label: "Custom dates" },
+];
+
+export const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "gigs", label: "Gigs" },
+];
+
+export const WHENS: { key: WhenKey; label: string }[] = [
+  { key: "upcoming", label: "Upcoming" },
+  { key: "past", label: "Completed" },
+  { key: "all", label: "All" },
+];
+
+export const SHOWS: { key: ShowKey; label: string }[] = [
+  { key: "gigs", label: "Booked and on hold" },
+  { key: "job", label: "Booked" },
+  { key: "hold", label: "On hold" },
+  { key: "wanted", label: "Asked, not free" },
+];
+
+export const SORTS: { key: SortKey; label: string }[] = [
+  { key: "date", label: "Date: soonest first" },
+  { key: "date-desc", label: "Date: latest first" },
+  { key: "lead", label: "Lead time: shortest first" },
+  { key: "lead-desc", label: "Lead time: longest first" },
+  { key: "price-desc", label: "Price: highest first" },
+  { key: "price", label: "Price: lowest first" },
 ];
 
 /** Lead-time buckets, in days. `max` is inclusive; null means no upper limit. */
@@ -33,15 +67,24 @@ export type Filters = {
   /** A locationKey, or NONE_KEY. */
   location: string | null;
   lead: LeadKey | null;
+  tab: TabKey;
+  /** The rest only apply to the Gigs tab. */
+  when: WhenKey;
+  show: ShowKey;
+  sort: SortKey;
 };
 
 export const DEFAULT_FILTERS: Filters = {
-  range: "year",
+  range: "all",
   from: null,
   to: null,
   person: null,
   location: null,
   lead: null,
+  tab: "overview",
+  when: "upcoming",
+  show: "gigs",
+  sort: "date",
 };
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -75,6 +118,10 @@ export function parseFilters(params: SearchParams): Filters {
     person: first(params.person),
     location: first(params.location),
     lead: oneOf(first(params.lead), LEAD_BUCKETS),
+    tab: oneOf(first(params.tab), TABS) ?? DEFAULT_FILTERS.tab,
+    when: oneOf(first(params.when), WHENS) ?? DEFAULT_FILTERS.when,
+    show: oneOf(first(params.show), SHOWS) ?? DEFAULT_FILTERS.show,
+    sort: oneOf(first(params.sort), SORTS) ?? DEFAULT_FILTERS.sort,
   };
 }
 
@@ -89,6 +136,9 @@ export function toQuery(filters: Filters): string {
   if (filters.person) params.set("person", filters.person);
   if (filters.location) params.set("location", filters.location);
   if (filters.lead) params.set("lead", filters.lead);
+  for (const key of ["tab", "when", "show", "sort"] as const) {
+    if (filters[key] !== DEFAULT_FILTERS[key]) params.set(key, filters[key]);
+  }
   return params.toString();
 }
 
@@ -98,9 +148,15 @@ export function withFilter(filters: Filters, change: Partial<Filters>): string {
   return query ? `/?${query}` : "/";
 }
 
-/** Whether any filter differs from the default. */
+/** The filters shared by both tabs, back to their defaults, staying on the same tab. */
+export function clearedFilters(filters: Filters): Filters {
+  return { ...DEFAULT_FILTERS, tab: filters.tab };
+}
+
+/** Whether a filter shared by both tabs differs from the default. */
 export function isFiltered(filters: Filters): boolean {
-  return toQuery(filters) !== "";
+  const { tab, when, show, sort } = DEFAULT_FILTERS;
+  return toQuery({ ...filters, tab, when, show, sort }) !== "";
 }
 
 /** How many filters besides the date range are set. */
@@ -108,9 +164,19 @@ export function extraFilterCount(filters: Filters): number {
   return [filters.person, filters.location, filters.lead].filter(Boolean).length;
 }
 
+/** The last day of a "YYYY-MM" month. */
+export function monthEnd(month: string): Day {
+  const [year, number] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10);
+}
+
 /** The first and last gig dates in range, inclusive. Null means open-ended. */
 export function dateBounds(filters: Filters, today: Day): { from: Day | null; to: Day | null } {
   switch (filters.range) {
+    case "month": {
+      const month = today.slice(0, 7);
+      return { from: `${month}-01`, to: monthEnd(month) };
+    }
     case "year": {
       const year = today.slice(0, 4);
       return { from: `${year}-01-01`, to: `${year}-12-31` };

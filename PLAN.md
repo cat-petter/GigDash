@@ -97,7 +97,7 @@ Any order. `job`/`hold`/`on hold` are optional (only used to flag calendar misma
 ## Dashboard (`src/app/page.tsx`, mobile-first, single column on phone)
 
 Filters are stored in the URL query string, so the page renders on the server and filtered views can be bookmarked. The filter bar is one row:
-- Date range: this year, last 12 months, all time, or custom.
+- Date range: all time (default), this month, this year, last 12 months, or custom.
 - Person.
 - Location.
 - Status: jobs, holds or all.
@@ -187,6 +187,7 @@ Environment variables:
 - **Wanted (his request: asked but not free):** optional third calendar (`WANTED_CALENDAR`, default `Wanted`, read only if it exists) → status `wanted` (migration `1_wanted`). Excluded from jobs/holds/money/hold rate and the default "Jobs and holds" view; shown via `tiles.wanted` (Overview line linking to `show=wanted`), the Show filter, and People/Places counts. Color `--series-3` `#1f9e89` / dark `#24a08b` (validated).
 - **Person card (his request):** `personProfile(rows, filters, today)` in stats.ts → `PersonProfile` component at the top of Overview when `filters.person` is set (ignores Show/Booked-ahead filters). `Ranked.typicalPrice` (median) feeds a "Usual price" sort in `RankList`.
 - **One page (his feedback, Oct 2026):** tabs, `RankList`, `GigTable`, `TabBar` and the Show filter are gone; `Filters` = range/from/to/person/location/lead. Overview = tiles, booked-ahead card (shortest/typical/average/longest, jobs only), lead histogram and by-period chart (jobs only), `NeedsAttention` at the bottom. `TRACK_FROM` (`trackFrom()` in dates.ts) drops events before a date from sync and deletes older rows, so old everyday-calendar titles don't pollute the lexicon; shown on /status. `main` is now the default branch; push there too.
+- **Two tabs again (his feedback, Oct 2026):** `Filters` gained `tab` (overview · gigs) and the Gigs-only `when` (upcoming · past · all), `show` (gigs = job+hold · job · hold · wanted) and `sort`; default range is now `all`, plus a `month` range. `gigList()` in stats.ts feeds `GigsView` → `GigCard` (read-only card per gig) with `GigControls`; `TabBar` is back with two tabs. `BarRow.href` makes chart bars open the Gigs tab (lead bucket sorted by lead time; a month as custom dates sorted by date). "Booked ahead" is called "Lead time" everywhere. `clearedFilters()` keeps the tab when clearing.
 - **Fresh start (Oct 20, 2026, his request):** migration `2_start_fresh` empties `Gig` and `SyncRun` once on deploy; `trackFrom()` defaults to `TRACKING_STARTED` = 2026-10-20 (`TRACK_FROM=all` reads everything).
 - **Renamed to "Gigs"** in the UI, manifest and README. Kept internal names as they were: repo `cat-petter/GigDash`, npm package, `gigdash_session` cookie, local DB name.
 - **Step 5 files:** `scripts/seed-demo.ts` (`npm run seed:demo`), `src/lib/gigs.ts` (`loadGigRows`), `icloudConfigured()` in caldav.ts, components `Pending` (transition + `FilterLink`), `FilterBar` (pill selects), `StatTile`, `BarCard` (recharts, chart/table toggle), `PersonLeadTable`, `NeedsAttention`, `GigTable`. Dev server for screenshots: `next dev -p 3100`; Playwright scripts in the scratchpad.

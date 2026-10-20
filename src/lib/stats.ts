@@ -6,6 +6,7 @@ import {
   leadBucket,
   NONE_KEY,
   type Filters,
+  type SortKey,
   type Status,
 } from "./filters";
 
@@ -246,7 +247,7 @@ export type Profile = {
 
 /**
  * One person's numbers in the chosen dates (and place, if one is picked).
- * Ignores the Booked-ahead filter so the card always shows the whole picture.
+ * Ignores the lead-time filter so the card always shows the whole picture.
  */
 export function personProfile(rows: GigRow[], filters: Filters, today: Day): Profile | null {
   if (!filters.person) return null;
@@ -285,6 +286,38 @@ export function personProfile(rows: GigRow[], filters: Filters, today: Day): Pro
       .sort((a, b) => b.jobs - a.jobs || byLabel(a, b))
       .slice(0, 3),
   };
+}
+
+/** Missing values sort last, whichever way the list is sorted. */
+function compareMissingLast(a: number | null, b: number | null, direction: 1 | -1): number {
+  if (a === null || b === null) return Number(a === null) - Number(b === null);
+  return (a - b) * direction;
+}
+
+const SORTERS: Record<SortKey, (a: GigRow, b: GigRow) => number> = {
+  date: () => 0,
+  "date-desc": (a, b) => b.gigDate.localeCompare(a.gigDate),
+  lead: (a, b) => compareMissingLast(a.leadDays, b.leadDays, 1),
+  "lead-desc": (a, b) => compareMissingLast(a.leadDays, b.leadDays, -1),
+  price: (a, b) => compareMissingLast(a.price, b.price, 1),
+  "price-desc": (a, b) => compareMissingLast(a.price, b.price, -1),
+};
+
+/** The gigs for the Gigs tab: the shared filters, then upcoming or completed, which calendar, and the sort. */
+export function gigList(rows: GigRow[], filters: Filters, today: Day): GigRow[] {
+  return rows
+    .filter((row) => {
+      if (row.deleted || !inScope(row, filters, today)) return false;
+      if (filters.when === "upcoming" && row.gigDate < today) return false;
+      if (filters.when === "past" && row.gigDate >= today) return false;
+      return filters.show === "gigs" ? row.status !== "wanted" : row.status === filters.show;
+    })
+    .sort(
+      (a, b) =>
+        SORTERS[filters.sort](a, b) ||
+        a.gigDate.localeCompare(b.gigDate) ||
+        (a.person ?? a.title).localeCompare(b.person ?? b.title, "en", { sensitivity: "base" }),
+    );
 }
 
 export type FilterOption = { key: string; label: string; count: number };

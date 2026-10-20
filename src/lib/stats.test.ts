@@ -5,6 +5,7 @@ import {
   computeStats,
   countsByPeriod,
   filterOptions,
+  gigList,
   type GigRow,
   median,
   needsAttention,
@@ -178,10 +179,10 @@ describe("lead time", () => {
 });
 
 describe("date range", () => {
-  it("counts this year's gigs only, by default", () => {
-    const rows = [gig({ gigDate: "2025-12-31" }), gig({ gigDate: "2026-01-01" }), gig({ gigDate: "2026-12-31" })];
-    expect(stats(rows).tiles.jobs).toBe(2);
-    expect(stats(rows, { range: "all" }).tiles.jobs).toBe(3);
+  it("counts every gig by default, and this year's with This year", () => {
+    const rows = [gig({ gigDate: "2025-12-31" }), gig({ gigDate: "2026-01-01" }), gig({ gigDate: "2027-01-01" })];
+    expect(stats(rows).tiles.jobs).toBe(3);
+    expect(stats(rows, { range: "year" }).tiles.jobs).toBe(1);
   });
 });
 
@@ -221,6 +222,49 @@ describe("countsByPeriod", () => {
 
   it("is empty with no gigs", () => {
     expect(countsByPeriod([], { from: "2026-01-01", to: "2026-12-31" })).toEqual([]);
+  });
+});
+
+describe("gigList", () => {
+  const list = (rows: GigRow[], filters: Partial<Filters> = {}) =>
+    gigList(rows, { ...DEFAULT_FILTERS, tab: "gigs", ...filters }, TODAY).map((row) => row.uid);
+
+  it("shows upcoming jobs and holds, soonest first, by default", () => {
+    const later = gig({ uid: "later", gigDate: "2026-12-01" });
+    const today = hold({ uid: "today", gigDate: TODAY });
+    const past = gig({ uid: "past", gigDate: "2026-09-01" });
+    const wanted = gig({ uid: "wanted", status: "wanted", gigDate: "2026-10-01" });
+    const deleted = gig({ uid: "deleted", gigDate: "2026-10-02", deleted: true });
+    const rows = [later, today, past, wanted, deleted];
+    expect(list(rows)).toEqual(["today", "later"]);
+    expect(list(rows, { when: "past" })).toEqual(["past"]);
+    expect(list(rows, { when: "all", sort: "date-desc" })).toEqual(["later", "today", "past"]);
+    expect(list(rows, { when: "all", show: "wanted" })).toEqual(["wanted"]);
+    expect(list(rows, { show: "hold" })).toEqual(["today"]);
+  });
+
+  it("sorts by lead time and price either way, with missing values last", () => {
+    const rows = [
+      gig({ uid: "a", leadDays: 40, price: 500, gigDate: "2026-10-01" }),
+      gig({ uid: "b", leadDays: 5, price: null, gigDate: "2026-10-02" }),
+      gig({ uid: "c", leadDays: null, price: 900, gigDate: "2026-10-03" }),
+      gig({ uid: "d", leadDays: 5, price: 700, gigDate: "2026-10-01" }),
+    ];
+    expect(list(rows, { sort: "lead" })).toEqual(["d", "b", "a", "c"]);
+    expect(list(rows, { sort: "lead-desc" })).toEqual(["a", "d", "b", "c"]);
+    expect(list(rows, { sort: "price" })).toEqual(["a", "d", "c", "b"]);
+    expect(list(rows, { sort: "price-desc" })).toEqual(["c", "d", "a", "b"]);
+  });
+
+  it("applies the shared filters", () => {
+    const rows = [
+      person("Kaller", { uid: "k", leadDays: 3, gigDate: "2026-10-01" }),
+      person("Weiss", { uid: "w", leadDays: 3, gigDate: "2026-10-01" }),
+      person("Kaller", { uid: "k2", leadDays: 60, gigDate: "2026-11-01" }),
+    ];
+    expect(list(rows, { person: "kaller" })).toEqual(["k", "k2"]);
+    expect(list(rows, { lead: "lt1w" })).toEqual(["k", "w"]);
+    expect(list(rows, { range: "custom", from: "2026-11-01", to: "2026-11-30" })).toEqual(["k2"]);
   });
 });
 

@@ -43,7 +43,7 @@ export function PersonProfile({ profile }: { profile: Profile }) {
           sub={p.upcoming > 0 ? `+${formatMoney(p.upcoming)} coming up` : undefined}
         />
         <Fact
-          label="Books ahead"
+          label="Lead time"
           value={p.leadMedian === null ? "—" : plural(Math.round(p.leadMedian), "day")}
           sub={
             p.leadMedian === null

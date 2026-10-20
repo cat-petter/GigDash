@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Bar, BarChart, type BarShapeProps, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMoney } from "@/lib/format";
 import { Card } from "./Card";
+import { FilterLink, usePending } from "./Pending";
 
 export type Series = {
   key: string;
@@ -22,6 +23,8 @@ export type BarRow = {
   /** A muted line in the tooltip, e.g. "from 7 priced jobs". */
   note?: string;
   values: Record<string, number>;
+  /** Where tapping the bar goes, e.g. the gigs it counts. */
+  href?: string;
 };
 
 type Props = {
@@ -200,6 +203,8 @@ function Chart({
   format,
   labelAll = false,
 }: Pick<Props, "rows" | "series" | "direction" | "format" | "labelAll">) {
+  const { navigate } = usePending();
+  const linked = rows.some((row) => row.href);
   let maxKey: string | null = null;
   let max = 0;
   for (const row of rows) {
@@ -248,6 +253,11 @@ function Chart({
       style={{ width: "100%", height: up ? PLOT_HEIGHT + AXIS_BAND : rows.length * ROW_HEIGHT + AXIS_BAND }}
       margin={up ? { top: 20, right: 4, bottom: 0, left: 0 } : { top: 0, right: format === "money" ? 56 : 32, bottom: 0, left: 0 }}
       barCategoryGap="28%"
+      className={linked ? "cursor-pointer" : undefined}
+      onClick={({ activeIndex }) => {
+        const href = rows[Number(activeIndex)]?.href;
+        if (href) navigate(href);
+      }}
     >
       <CartesianGrid vertical={!up} horizontal={up} />
       {up ? (
@@ -304,7 +314,13 @@ function DataTable({ rows, series, format, labelHeader }: Pick<Props, "rows" | "
           {rows.map((row) => (
             <tr key={row.key}>
               <td className="px-1 py-1.5">
-                {row.full ?? row.label}
+                {row.href ? (
+                  <FilterLink href={row.href} className="text-accent">
+                    {row.full ?? row.label}
+                  </FilterLink>
+                ) : (
+                  (row.full ?? row.label)
+                )}
                 {row.note && <span className="block text-xs text-muted">{row.note}</span>}
               </td>
               {series.map((s) => (
@@ -324,8 +340,9 @@ function DataTable({ rows, series, format, labelHeader }: Pick<Props, "rows" | "
 }
 
 /**
- * A bar chart. Tapping a bar shows its numbers; a screen reader gets the same
- * numbers as a table instead.
+ * A bar chart. Pointing at a bar shows its numbers, and tapping a bar with an
+ * href goes there. A screen reader gets the same numbers and links as a table,
+ * which also shows itself when a keyboard tabs into it.
  */
 export function BarCard({ title, note, rows, series, direction, format, labelHeader, empty, labelAll }: Props) {
   const hasData = rows.some((row) => total(row, series) > 0);
@@ -339,7 +356,7 @@ export function BarCard({ title, note, rows, series, direction, format, labelHea
             <Legend series={series} />
             <Chart rows={rows} series={series} direction={direction} format={format} labelAll={labelAll} />
           </div>
-          <div className="sr-only">
+          <div className="sr-only focus-within:not-sr-only">
             <DataTable rows={rows} series={series} format={format} labelHeader={labelHeader} />
           </div>
         </>
