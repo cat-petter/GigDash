@@ -6,7 +6,7 @@ import type { SyncRun } from "@/generated/prisma/client";
 import { Card } from "@/components/Card";
 import { SyncButton } from "@/components/SyncButton";
 import { calendarNames, listCalendarNames } from "@/lib/caldav";
-import { appTimeZone } from "@/lib/dates";
+import { appTimeZone, trackFrom } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
 import { isPending, syncStatus } from "@/lib/run-sync";
@@ -146,6 +146,14 @@ export default async function StatusPage() {
     zoneProblem = messageOf(error);
   }
 
+  let from: string | null = null;
+  let fromProblem: string | null = null;
+  try {
+    from = trackFrom();
+  } catch (error) {
+    fromProblem = messageOf(error);
+  }
+
   const live = { deletedAt: null };
   const [runs, sync, active, noBookingDate, moved, fellThrough, unreadable] = await Promise.all([
     db.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
@@ -202,6 +210,16 @@ export default async function StatusPage() {
           <Fact label="Holds that fell through" value={fellThrough.toLocaleString("en-US")} />
           <Fact label="Titles that couldn't be read" value={unreadable.toLocaleString("en-US")} />
           <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
+          <Fact
+            label="Tracking gigs from"
+            value={from ?? "The start"}
+            note={
+              fromProblem ??
+              (from
+                ? "Set by TRACK_FROM. Events before this date are ignored, so old titles don't mix up names and places."
+                : "Set TRACK_FROM to a date like 2025-01-01 to ignore events from before it.")
+            }
+          />
         </div>
       </Card>
 

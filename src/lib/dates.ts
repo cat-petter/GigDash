@@ -22,6 +22,19 @@ export function isDay(value: string): value is Day {
   return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
 }
 
+type Env = Record<string, string | undefined>;
+
+/**
+ * The first gig date the app tracks, from TRACK_FROM. Events before it are ignored and
+ * removed, for calendars that were once used for other things. Null means everything.
+ */
+export function trackFrom(env: Env = process.env): Day | null {
+  const value = env.TRACK_FROM?.trim();
+  if (!value) return null;
+  if (!isDay(value)) throw new Error(`TRACK_FROM must be a date like 2025-01-01, not "${value}"`);
+  return value;
+}
+
 /** The calendar day an instant falls on in the given time zone. */
 export function dayInZone(instant: Date, timeZone: string): Day {
   // en-CA formats as YYYY-MM-DD.

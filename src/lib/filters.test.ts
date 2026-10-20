@@ -7,7 +7,6 @@ import {
   inScope,
   isFiltered,
   leadBucket,
-  matchesShow,
   NONE_KEY,
   parseFilters,
   toQuery,
@@ -47,7 +46,7 @@ describe("leadBucket", () => {
 });
 
 describe("parseFilters", () => {
-  it("defaults to this year, everyone, jobs and holds", () => {
+  it("defaults to this year and everyone", () => {
     expect(parseFilters({})).toEqual(DEFAULT_FILTERS);
   });
 
@@ -59,9 +58,7 @@ describe("parseFilters", () => {
         to: "2026-06-30",
         person: "kaller",
         location: NONE_KEY,
-        show: "hold",
         lead: "1to3m",
-        tab: "people",
       }),
     ).toEqual({
       range: "custom",
@@ -69,18 +66,16 @@ describe("parseFilters", () => {
       to: "2026-06-30",
       person: "kaller",
       location: NONE_KEY,
-      show: "hold",
       lead: "1to3m",
-      tab: "people",
     });
   });
 
   it("falls back to defaults for values it doesn't know", () => {
-    expect(parseFilters({ range: "forever", show: "maybe", lead: "soon", person: "  ", tab: "money" })).toEqual(DEFAULT_FILTERS);
+    expect(parseFilters({ range: "forever", lead: "soon", person: "  " })).toEqual(DEFAULT_FILTERS);
   });
 
   it("takes the first of repeated parameters", () => {
-    expect(parseFilters({ show: ["job", "hold"] }).show).toBe("job");
+    expect(parseFilters({ person: ["kaller", "weiss"] }).person).toBe("kaller");
   });
 
   it("swaps custom dates given the wrong way round and drops bad ones", () => {
@@ -107,27 +102,22 @@ describe("toQuery and withFilter", () => {
   });
 
   it("round-trips through parseFilters", () => {
-    const original = filters({ range: "custom", from: "2025-01-01", person: "reb yossi", show: "job", lead: "3m" });
+    const original = filters({ range: "custom", from: "2025-01-01", person: "reb yossi", lead: "3m" });
     const query = toQuery(original);
     expect(parseFilters(Object.fromEntries(new URLSearchParams(query)))).toEqual(original);
   });
 
   it("changes one filter and keeps the rest", () => {
-    expect(withFilter(filters({ show: "job" }), { person: "kaller" })).toBe("/?person=kaller&show=job");
+    expect(withFilter(filters({ lead: "3m" }), { person: "kaller" })).toBe("/?person=kaller&lead=3m");
   });
 
   it("drops custom dates when switching to another range", () => {
     expect(withFilter(filters({ range: "custom", from: "2025-01-01" }), { range: "all" })).toBe("/?range=all");
   });
 
-  it("keeps the tab in the URL, but doesn't count it as a filter", () => {
-    expect(withFilter(filters({ tab: "gigs" }), { person: "kaller" })).toBe("/?person=kaller&tab=gigs");
-    expect(isFiltered(filters({ tab: "gigs" }))).toBe(false);
-  });
-
   it("counts the filters besides the dates", () => {
     expect(extraFilterCount(filters({ range: "all" }))).toBe(0);
-    expect(extraFilterCount(filters({ person: "kaller", show: "job", lead: "3m" }))).toBe(3);
+    expect(extraFilterCount(filters({ person: "kaller", location: "x", lead: "3m" }))).toBe(3);
   });
 });
 
@@ -169,16 +159,5 @@ describe("inScope", () => {
   it("matches gigs with no location to the 'No location' option", () => {
     expect(inScope({ ...row, locationKey: null }, filters({ location: NONE_KEY }), TODAY)).toBe(true);
     expect(inScope(row, filters({ location: NONE_KEY }), TODAY)).toBe(false);
-  });
-});
-
-describe("matchesShow", () => {
-  it("leaves wanted dates out of jobs and holds, and shows them only when asked", () => {
-    const wanted = { ...row, status: "wanted" as const };
-    expect(matchesShow(row, "all")).toBe(true);
-    expect(matchesShow(wanted, "all")).toBe(false);
-    expect(matchesShow(wanted, "wanted")).toBe(true);
-    expect(matchesShow(row, "wanted")).toBe(false);
-    expect(parseFilters({ show: "wanted" }).show).toBe("wanted");
   });
 });

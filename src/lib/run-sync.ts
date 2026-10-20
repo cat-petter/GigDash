@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import type { GigCalendar, SyncRun } from "@/generated/prisma/client";
 import { calendarNames, fetchGigCalendars } from "./caldav";
-import { appTimeZone } from "./dates";
+import { appTimeZone, dayToDate, trackFrom } from "./dates";
 import { db } from "./db";
 import { findUid, parseIcs } from "./ics";
 import { type FetchedEvent, planSync } from "./sync";
@@ -23,6 +23,7 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
   try {
     const timeZone = appTimeZone();
     const names = calendarNames();
+    const from = trackFrom();
     const calendars = await fetchCalendars(names);
 
     const warnings: string[] = [];
@@ -53,13 +54,17 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
       else warnings.push(`Nothing in "${name}" was marked deleted this time, since an event couldn't be read`);
     }
 
+    // Everything before TRACK_FROM is left out, so old titles don't confuse the names and places.
+    const tracked = from ? fetched.filter((event) => event.gigDate >= from) : fetched;
+
     const plan = await db.$transaction(
       async (tx) => {
         await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${LOCK_ID})`);
         const now = new Date();
         const backfill = (await tx.syncRun.count({ where: { ok: true } })) === 0;
+        if (from) await tx.gig.deleteMany({ where: { gigDate: { lt: dayToDate(from) } } });
         const existing = await tx.gig.findMany();
-        const plan = planSync({ fetched, existing, fetchedCalendars, keepUids, backfill, now, timeZone });
+        const plan = planSync({ fetched: tracked, existing, fetchedCalendars, keepUids, backfill, now, timeZone });
 
         if (plan.create.length > 0) await tx.gig.createMany({ data: plan.create });
         for (const { uid, data } of plan.update) await tx.gig.update({ where: { uid }, data });
@@ -80,11 +85,11 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
         finishedAt: new Date(),
         ok: true,
         message: [...warnings, ...plan.warnings].join("\n") || null,
-        fetched: fetched.length,
+        fetched: tracked.length,
         created: plan.create.length,
         updated: plan.update.length,
         deleted: plan.delete.length,
-        missingCreated: fetched.filter((event) => !event.created).length,
+        missingCreated: tracked.filter((event) => !event.created).length,
       },
     });
   } catch (error) {

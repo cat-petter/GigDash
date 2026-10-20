@@ -3,29 +3,13 @@ import { addDays, isDay, type Day } from "./dates";
 export type RangeKey = "year" | "12m" | "all" | "custom";
 /** Which calendar a gig is in. "wanted" means he was asked but wasn't free. */
 export type Status = "job" | "hold" | "wanted";
-export type ShowKey = "all" | Status;
 export type LeadKey = "lt1w" | "1to4w" | "1to3m" | "3m";
-export type TabKey = "overview" | "people" | "places" | "gigs";
-
-export const TABS: { key: TabKey; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "people", label: "People" },
-  { key: "places", label: "Places" },
-  { key: "gigs", label: "Gigs" },
-];
 
 export const RANGES: { key: RangeKey; label: string }[] = [
   { key: "year", label: "This year" },
   { key: "12m", label: "Last 12 months" },
   { key: "all", label: "All time" },
   { key: "custom", label: "Custom dates" },
-];
-
-export const SHOW: { key: ShowKey; label: string }[] = [
-  { key: "all", label: "Jobs and holds" },
-  { key: "job", label: "Jobs" },
-  { key: "hold", label: "Holds" },
-  { key: "wanted", label: "Wanted (not free)" },
 ];
 
 /** Lead-time buckets, in days. `max` is inclusive; null means no upper limit. */
@@ -48,10 +32,7 @@ export type Filters = {
   person: string | null;
   /** A locationKey, or NONE_KEY. */
   location: string | null;
-  show: ShowKey;
   lead: LeadKey | null;
-  /** Which part of the dashboard is showing. Not a filter, but it rides along in the same URL. */
-  tab: TabKey;
 };
 
 export const DEFAULT_FILTERS: Filters = {
@@ -60,9 +41,7 @@ export const DEFAULT_FILTERS: Filters = {
   to: null,
   person: null,
   location: null,
-  show: "all",
   lead: null,
-  tab: "overview",
 };
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -95,9 +74,7 @@ export function parseFilters(params: SearchParams): Filters {
     to,
     person: first(params.person),
     location: first(params.location),
-    show: oneOf(first(params.show), SHOW) ?? DEFAULT_FILTERS.show,
     lead: oneOf(first(params.lead), LEAD_BUCKETS),
-    tab: oneOf(first(params.tab), TABS) ?? DEFAULT_FILTERS.tab,
   };
 }
 
@@ -111,9 +88,7 @@ export function toQuery(filters: Filters): string {
   }
   if (filters.person) params.set("person", filters.person);
   if (filters.location) params.set("location", filters.location);
-  if (filters.show !== DEFAULT_FILTERS.show) params.set("show", filters.show);
   if (filters.lead) params.set("lead", filters.lead);
-  if (filters.tab !== DEFAULT_FILTERS.tab) params.set("tab", filters.tab);
   return params.toString();
 }
 
@@ -123,14 +98,14 @@ export function withFilter(filters: Filters, change: Partial<Filters>): string {
   return query ? `/?${query}` : "/";
 }
 
-/** Whether any filter differs from the default. The tab doesn't count. */
+/** Whether any filter differs from the default. */
 export function isFiltered(filters: Filters): boolean {
-  return toQuery({ ...filters, tab: DEFAULT_FILTERS.tab }) !== "";
+  return toQuery(filters) !== "";
 }
 
 /** How many filters besides the date range are set. */
 export function extraFilterCount(filters: Filters): number {
-  return [filters.person, filters.location, filters.lead, filters.show !== "all" || null].filter(Boolean).length;
+  return [filters.person, filters.location, filters.lead].filter(Boolean).length;
 }
 
 /** The first and last gig dates in range, inclusive. Null means open-ended. */
@@ -163,7 +138,7 @@ type Filterable = {
   leadDays: number | null;
 };
 
-/** Whether a gig passes every filter except jobs/holds. */
+/** Whether a gig passes every filter. */
 export function inScope(row: Filterable, filters: Filters, today: Day): boolean {
   const { from, to } = dateBounds(filters, today);
   if (from && row.gigDate < from) return false;
@@ -172,9 +147,4 @@ export function inScope(row: Filterable, filters: Filters, today: Day): boolean 
   if (filters.location && (row.locationKey ?? NONE_KEY) !== filters.location) return false;
   if (filters.lead && leadBucket(row.leadDays) !== filters.lead) return false;
   return true;
-}
-
-/** "all" means jobs and holds; wanted dates only show when asked for. */
-export function matchesShow(row: Filterable, show: ShowKey): boolean {
-  return show === "all" ? row.status !== "wanted" : row.status === show;
 }

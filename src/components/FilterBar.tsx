@@ -10,8 +10,6 @@ import {
   type LeadKey,
   RANGES,
   type RangeKey,
-  SHOW,
-  type ShowKey,
   withFilter,
 } from "@/lib/filters";
 import type { FilterOption } from "@/lib/stats";
@@ -148,7 +146,7 @@ export function FilterBar({ filters, people, locations }: Props) {
         </button>
         {isFiltered(filters) && (
           <FilterLink
-            href={withFilter(DEFAULT_FILTERS, { tab: filters.tab })}
+            href={withFilter(DEFAULT_FILTERS, {})}
             scroll={false}
             onClick={() => setCustomChosen(false)}
             className="ml-auto px-1 text-sm text-accent"
@@ -202,13 +200,6 @@ export function FilterBar({ filters, people, locations }: Props) {
               </option>
             ))}
           </Field>
-          <Field label="Show" value={filters.show} onChange={(value) => go({ show: value as ShowKey })}>
-            {SHOW.map((show) => (
-              <option key={show.key} value={show.key}>
-                {show.label}
-              </option>
-            ))}
-          </Field>
           <Field
             label="Booked ahead"
             value={filters.lead ?? ""}
@@ -233,9 +224,6 @@ export function FilterBar({ filters, people, locations }: Props) {
             <Chip href={withFilter(filters, { location: null })}>
               {nameOf(withCurrent(locations, filters.location), filters.location)}
             </Chip>
-          )}
-          {filters.show !== DEFAULT_FILTERS.show && (
-            <Chip href={withFilter(filters, { show: DEFAULT_FILTERS.show })}>{filters.show === "job" ? "Only jobs" : filters.show === "hold" ? "Only holds" : "Only wanted"}</Chip>
           )}
           {filters.lead && (
             <Chip href={withFilter(filters, { lead: null })}>

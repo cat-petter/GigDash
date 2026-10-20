@@ -45,7 +45,11 @@ export function PersonProfile({ profile }: { profile: Profile }) {
         <Fact
           label="Books ahead"
           value={p.leadMedian === null ? "—" : plural(Math.round(p.leadMedian), "day")}
-          sub={p.leadMedian === null ? "No booking dates" : "Typical (median)"}
+          sub={
+            p.leadMedian === null
+              ? "No booking dates"
+              : `Typical · ${p.leadShortest}–${p.leadLongest} days`
+          }
         />
         <Fact label="Last gig" value={p.lastGig ? formatDay(p.lastGig) : "—"} />
         <Fact label="Next gig" value={p.nextGig ? formatDay(p.nextGig) : "—"} />

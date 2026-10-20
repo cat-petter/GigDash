@@ -98,7 +98,7 @@ describe("money", () => {
   });
 
   it("labels a group with its most common spelling, ties going to the latest gig", () => {
-    const { people } = stats([
+    const { people } = filterOptions([
       gig({ person: "kaller", gigDate: "2026-01-01" }),
       gig({ person: "Kaller", gigDate: "2026-02-01" }),
       gig({ person: "Kaller", gigDate: "2026-03-01" }),
@@ -106,7 +106,7 @@ describe("money", () => {
     ]);
     expect(people[0].label).toBe("Kaller");
 
-    const tie = stats([gig({ person: "kaller", gigDate: "2026-05-01" }), gig({ person: "Kaller", gigDate: "2026-01-01" })]);
+    const tie = filterOptions([gig({ person: "kaller", gigDate: "2026-05-01" }), gig({ person: "Kaller", gigDate: "2026-01-01" })]);
     expect(tie.people[0].label).toBe("kaller");
   });
 });
@@ -149,7 +149,7 @@ describe("lead time", () => {
     expect(tiles).toMatchObject({ leadMedian: 30, leadAverage: 65.75, leadCounted: 4, leadMissing: 2 });
   });
 
-  it("counts jobs and holds per bucket", () => {
+  it("counts only jobs per bucket", () => {
     const histogram = stats([
       gig({ leadDays: 0 }),
       gig({ leadDays: 6 }),
@@ -157,20 +157,17 @@ describe("lead time", () => {
       gig({ leadDays: 95 }),
       gig({ leadDays: null }),
     ]).leadHistogram;
-    expect(histogram.map(({ key, jobs, holds }) => [key, jobs, holds])).toEqual([
-      ["lt1w", 2, 0],
-      ["1to4w", 0, 1],
-      ["1to3m", 0, 0],
-      ["3m", 1, 0],
+    expect(histogram.map(({ key, jobs }) => [key, jobs])).toEqual([
+      ["lt1w", 2],
+      ["1to4w", 0],
+      ["1to3m", 0],
+      ["3m", 1],
     ]);
   });
 
-  it("uses the jobs/holds filter for lead times, but not for the tiles' counts", () => {
-    const rows = [gig({ leadDays: 10 }), hold({ leadDays: 100, gigDate: "2026-11-01" })];
-    const onlyHolds = stats(rows, { show: "hold" });
-    expect(onlyHolds.tiles.leadMedian).toBe(100);
-    expect(onlyHolds.tiles.jobs).toBe(1);
-    expect(onlyHolds.gigs).toHaveLength(1);
+  it("gives the shortest, longest, average and typical lead time of jobs", () => {
+    const rows = [gig({ leadDays: 2 }), gig({ leadDays: 10 }), gig({ leadDays: 90 }), hold({ leadDays: 400, gigDate: "2026-11-01" })];
+    expect(stats(rows).tiles).toMatchObject({ leadShortest: 2, leadLongest: 90, leadMedian: 10, leadAverage: 34 });
   });
 
   it("filters by lead-time bucket", () => {
@@ -188,36 +185,6 @@ describe("date range", () => {
   });
 });
 
-describe("people and places", () => {
-  it("sums jobs, holds, money and lead time for each, most gigs first", () => {
-    const { people, places } = stats([
-      person("Weiss", { price: 500, leadDays: 10 }),
-      person("Kaller", { price: 600, leadDays: 20 }),
-      person("Kaller", { price: null, leadDays: 40 }),
-      hold({ leadDays: null }),
-      person("Kaller", { price: 900, deleted: true }),
-    ]);
-    expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 2, holds: 1, wanted: 0, dollars: 600, typicalPrice: 600, unpriced: 1, leadMedian: 30 },
-      { key: "weiss", label: "Weiss", jobs: 1, holds: 0, wanted: 0, dollars: 500, typicalPrice: 500, unpriced: 0, leadMedian: 10 },
-    ]);
-    expect(places).toHaveLength(1);
-    expect(places[0]).toMatchObject({ key: "neemas hachaim", jobs: 3, holds: 1, wanted: 0, dollars: 1100 });
-  });
-
-  it("follows the jobs/holds filter and gives no lead time when there's none", () => {
-    const { people } = stats([gig(), hold({ leadDays: null })], { show: "hold" });
-    expect(people).toEqual([
-      { key: "kaller", label: "Kaller", jobs: 0, holds: 1, wanted: 0, dollars: 0, typicalPrice: null, unpriced: 0, leadMedian: null },
-    ]);
-  });
-
-  it("groups gigs without a location as 'No location'", () => {
-    const { places } = stats([gig({ location: null, locationKey: null, price: 300 })]);
-    expect(places).toMatchObject([{ key: NONE_KEY, label: "No location", dollars: 300 }]);
-  });
-});
-
 describe("countsByPeriod", () => {
   it("fills every month of the range, including empty ones", () => {
     const periods = countsByPeriod([gig({ gigDate: "2026-03-15" }), hold({ gigDate: "2026-03-20" })], {
@@ -225,8 +192,8 @@ describe("countsByPeriod", () => {
       to: "2026-12-31",
     });
     expect(periods).toHaveLength(12);
-    expect(periods[2]).toEqual({ key: "2026-03", label: "Mar", full: "March 2026", jobs: 1, holds: 1, wanted: 0 });
-    expect(periods[0]).toMatchObject({ jobs: 0, holds: 0 });
+    expect(periods[2]).toEqual({ key: "2026-03", label: "Mar", full: "March 2026", jobs: 1 });
+    expect(periods[0]).toMatchObject({ jobs: 0 });
   });
 
   it("spans the data when the range is open, labelling months with their year across years", () => {
@@ -304,19 +271,9 @@ describe("wanted", () => {
     const rows = [gig({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-04-01" })];
     const stats = computeStats(rows, DEFAULT_FILTERS, TODAY);
     expect(stats.tiles).toMatchObject({ jobs: 1, earned: 600, openHolds: 0, wanted: 2 });
-    expect(stats.gigs).toHaveLength(1);
-    expect(stats.byPeriod.reduce((total, period) => total + period.wanted, 0)).toBe(0);
+    expect(stats.byPeriod.reduce((total, period) => total + period.jobs, 0)).toBe(1);
   });
 
-  it("counts toward who asks most, and shows alone when filtered to", () => {
-    const rows = [gig(), wanted({ person: "Weiss", personKey: "weiss" }), wanted({ person: "Weiss", personKey: "weiss" })];
-    const all = computeStats(rows, DEFAULT_FILTERS, TODAY);
-    expect(all.people[0]).toMatchObject({ key: "weiss", jobs: 0, wanted: 2, dollars: 0 });
-    const only = computeStats(rows, { ...DEFAULT_FILTERS, show: "wanted" }, TODAY);
-    expect(only.gigs).toHaveLength(2);
-    expect(only.people.map((person) => person.key)).toEqual(["weiss"]);
-    expect(only.tiles.jobs).toBe(1);
-  });
 });
 
 describe("personProfile", () => {
@@ -329,7 +286,7 @@ describe("personProfile", () => {
       gig({ person: "Weiss", personKey: "weiss", price: 2000 }),
       gig({ status: "wanted", titleKeyword: null, gigDate: "2026-07-01" }),
     ];
-    const profile = personProfile(rows, { ...DEFAULT_FILTERS, person: "kaller", show: "hold" }, TODAY)!;
+    const profile = personProfile(rows, { ...DEFAULT_FILTERS, person: "kaller", lead: "3m" }, TODAY)!;
     expect(profile).toMatchObject({
       label: "Kaller",
       jobs: 4,

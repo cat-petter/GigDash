@@ -4,7 +4,6 @@ import {
   inScope,
   LEAD_BUCKETS,
   leadBucket,
-  matchesShow,
   NONE_KEY,
   type Filters,
   type Status,
@@ -34,24 +33,8 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** Past this many months, "by month" becomes "by year". */
 const MAX_MONTHS = 36;
 
-export type PeriodCount = { key: string; label: string; full: string; jobs: number; holds: number; wanted: number };
-export type LeadBar = { key: string; label: string; jobs: number; holds: number; wanted: number };
-/** One person or place on the People and Places tabs. */
-export type Ranked = {
-  key: string;
-  label: string;
-  jobs: number;
-  holds: number;
-  /** Times he was asked but wasn't free. */
-  wanted: number;
-  /** From priced jobs only. */
-  dollars: number;
-  /** Median price of their priced jobs. */
-  typicalPrice: number | null;
-  unpriced: number;
-  /** Median days booked ahead, or null when none of their gigs has a booking date. */
-  leadMedian: number | null;
-};
+export type PeriodCount = { key: string; label: string; full: string; jobs: number };
+export type LeadBar = { key: string; label: string; jobs: number };
 
 export function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -116,35 +99,13 @@ export const byLocation = (rows: GigRow[]) => groupBy(rows, locationKeyOf, locat
 const byLabel = (a: { label: string }, b: { label: string }) =>
   a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
-/** Everyone (or everywhere) in view, most gigs first. No "Other": the list scrolls instead. */
-function ranked(groups: Group[]): Ranked[] {
-  return groups
-    .map((group) => {
-      const jobs = group.rows.filter((row) => row.status === "job");
-      return {
-        key: group.key,
-        label: group.label,
-        jobs: jobs.length,
-        holds: group.rows.filter((row) => row.status === "hold").length,
-        wanted: group.rows.filter((row) => row.status === "wanted").length,
-        dollars: sum(jobs),
-        typicalPrice: median(jobs.flatMap((row) => (row.price === null ? [] : [row.price]))),
-        unpriced: jobs.filter((row) => row.price === null).length,
-        leadMedian: median(group.rows.filter(hasLead).map((row) => row.leadDays)),
-      };
-    })
-    .sort(
-      (a, b) => b.jobs + b.holds + b.wanted - (a.jobs + a.holds + a.wanted) || b.jobs - a.jobs || byLabel(a, b),
-    );
-}
-
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const LONG_MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
-/** Jobs and holds per month across the range, including empty months. Per year if that's too many months. */
+/** Jobs per month across the range, including empty months. Per year if that's too many months. */
 export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: Day | null }): PeriodCount[] {
   if (rows.length === 0) return [];
   const dates = rows.map((row) => row.gigDate).sort();
@@ -161,7 +122,7 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
   const periods: PeriodCount[] = [];
   if (yearly) {
     for (let year = startYear; year <= endYear; year++) {
-      periods.push({ key: String(year), label: String(year), full: String(year), jobs: 0, holds: 0, wanted: 0 });
+      periods.push({ key: String(year), label: String(year), full: String(year), jobs: 0 });
     }
   } else {
     for (let i = 0; i < months; i++) {
@@ -172,8 +133,6 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
         label: oneYear ? MONTHS[month] : `${MONTHS[month]} ’${String(year).slice(2)}`,
         full: `${LONG_MONTHS[month]} ${year}`,
         jobs: 0,
-        holds: 0,
-        wanted: 0,
       });
     }
   }
@@ -183,8 +142,6 @@ export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: D
     const period = periods[index.get(yearly ? row.gigDate.slice(0, 4) : row.gigDate.slice(0, 7)) ?? -1];
     if (!period) continue;
     if (row.status === "job") period.jobs += 1;
-    else if (row.status === "hold") period.holds += 1;
-    else period.wanted += 1;
   }
   return periods;
 }
@@ -200,16 +157,13 @@ function sum(rows: GigRow[]): number {
 export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
   const bounds = dateBounds(filters, today);
   const live = rows.filter((row) => !row.deleted);
-  // Tiles cover both jobs and holds, so they ignore the jobs/holds filter.
   const inRange = live.filter((row) => inScope(row, filters, today));
-  const scoped = inRange.filter((row) => row.status !== "wanted");
   const wanted = inRange.filter((row) => row.status === "wanted");
-  const shown = inRange.filter((row) => matchesShow(row, filters.show));
 
-  const jobs = scoped.filter((row) => row.status === "job");
+  const jobs = inRange.filter((row) => row.status === "job");
   const pastJobs = jobs.filter((row) => row.gigDate < today);
   const upcomingJobs = jobs.filter((row) => row.gigDate >= today);
-  const holds = scoped.filter((row) => row.status === "hold");
+  const holds = inRange.filter((row) => row.status === "hold");
 
   // A hold falls through when it's deleted, or when its date passes while it's still a hold.
   const converted = jobs.filter((row) => row.confirmedAt !== null);
@@ -221,7 +175,8 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
     .filter((row) => row.heldAt && row.confirmedAt)
     .map((row) => Math.max(0, Math.floor((row.confirmedAt!.getTime() - row.heldAt!.getTime()) / MS_PER_DAY)));
 
-  const withLead = shown.filter(hasLead);
+  // Lead times and the charts count booked jobs only.
+  const withLead = jobs.filter(hasLead);
   const leads = withLead.map((row) => row.leadDays);
 
   return {
@@ -242,9 +197,11 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
       medianDaysToConfirm: median(daysToConfirm),
       leadMedian: median(leads),
       leadAverage: average(leads),
+      leadShortest: leads.length ? Math.min(...leads) : null,
+      leadLongest: leads.length ? Math.max(...leads) : null,
       leadCounted: leads.length,
-      /** Shown gigs without a usable lead time (unknown booking date, or entered after the gig). */
-      leadMissing: shown.length - leads.length,
+      /** Jobs without a usable lead time (unknown booking date, or entered after the gig). */
+      leadMissing: jobs.length - leads.length,
       /** Dates he was asked for but wasn't free. */
       wanted: wanted.length,
     },
@@ -252,17 +209,10 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
       (bucket): LeadBar => ({
         key: bucket.key,
         label: bucket.label,
-        jobs: withLead.filter((row) => row.status === "job" && leadBucket(row.leadDays) === bucket.key).length,
-        holds: withLead.filter((row) => row.status === "hold" && leadBucket(row.leadDays) === bucket.key).length,
-        wanted: withLead.filter((row) => row.status === "wanted" && leadBucket(row.leadDays) === bucket.key).length,
+        jobs: withLead.filter((row) => leadBucket(row.leadDays) === bucket.key).length,
       }),
     ),
-    byPeriod: countsByPeriod(shown, bounds),
-    // Wanted dates count toward who asks most, unless the view is only jobs or only holds.
-    people: ranked(byPerson(filters.show === "all" ? inRange : shown)),
-    places: ranked(byLocation(filters.show === "all" ? inRange : shown)),
-    /** The gig list, latest first. */
-    gigs: [...shown].sort((a, b) => b.gigDate.localeCompare(a.gigDate)),
+    byPeriod: countsByPeriod(jobs, bounds),
   };
 }
 
@@ -283,6 +233,8 @@ export type Profile = {
   earned: number;
   upcoming: number;
   leadMedian: number | null;
+  leadShortest: number | null;
+  leadLongest: number | null;
   lastGig: Day | null;
   nextGig: Day | null;
   openHolds: number;
@@ -294,12 +246,11 @@ export type Profile = {
 
 /**
  * One person's numbers in the chosen dates (and place, if one is picked).
- * Ignores the Show and Booked-ahead filters so the card always shows the whole picture.
+ * Ignores the Booked-ahead filter so the card always shows the whole picture.
  */
 export function personProfile(rows: GigRow[], filters: Filters, today: Day): Profile | null {
   if (!filters.person) return null;
-  const all = computeStats(rows, { ...filters, show: "all", lead: null }, today);
-  const person = all.people.find((row) => row.key === filters.person);
+  const all = computeStats(rows, { ...filters, lead: null }, today);
   const mine = rows.filter(
     (row) => !row.deleted && inScope(row, { ...filters, lead: null }, today),
   );
@@ -307,7 +258,7 @@ export function personProfile(rows: GigRow[], filters: Filters, today: Day): Pro
   const prices = jobs.flatMap((row) => (row.price === null ? [] : [row.price]));
   const past = jobs.filter((row) => row.gigDate < today).map((row) => row.gigDate).sort();
   const future = jobs.filter((row) => row.gigDate >= today).map((row) => row.gigDate).sort();
-  const label = person?.label ?? mine[0]?.person ?? (filters.person === NONE_KEY ? "No name" : filters.person);
+  const label = byPerson(mine)[0]?.label ?? filters.person;
   return {
     label,
     jobs: jobs.length,
@@ -320,16 +271,19 @@ export function personProfile(rows: GigRow[], filters: Filters, today: Day): Pro
     priced: prices.length,
     earned: all.tiles.earned,
     upcoming: all.tiles.upcoming,
-    leadMedian: median(mine.filter((row) => row.status !== "wanted").filter(hasLead).map((row) => row.leadDays)),
+    leadMedian: all.tiles.leadMedian,
+    leadShortest: all.tiles.leadShortest,
+    leadLongest: all.tiles.leadLongest,
     lastGig: past.at(-1) ?? null,
     nextGig: future[0] ?? null,
     openHolds: all.tiles.openHolds,
     holdRate: all.tiles.holdRate,
     wanted: all.tiles.wanted,
-    topPlaces: ranked(byLocation(jobs))
+    topPlaces: byLocation(jobs)
       .filter((place) => place.key !== NONE_KEY)
-      .slice(0, 3)
-      .map((place) => ({ label: place.label, jobs: place.jobs })),
+      .map((place) => ({ label: place.label, jobs: place.rows.length }))
+      .sort((a, b) => b.jobs - a.jobs || byLabel(a, b))
+      .slice(0, 3),
   };
 }
 
