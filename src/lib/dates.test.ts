@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { trackFrom } from "./dates";
+import { TRACKING_STARTED, trackFrom } from "./dates";
 
 describe("trackFrom", () => {
-  it("is null when TRACK_FROM isn't set", () => {
-    expect(trackFrom({})).toBeNull();
-    expect(trackFrom({ TRACK_FROM: "  " })).toBeNull();
+  it("starts from the day he started fresh when TRACK_FROM isn't set", () => {
+    expect(trackFrom({})).toBe(TRACKING_STARTED);
+    expect(trackFrom({ TRACK_FROM: "  " })).toBe(TRACKING_STARTED);
+  });
+
+  it("reads everything for 'all'", () => {
+    expect(trackFrom({ TRACK_FROM: "all" })).toBeNull();
   });
 
   it("reads a date", () => {

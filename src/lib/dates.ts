@@ -24,13 +24,17 @@ export function isDay(value: string): value is Day {
 
 type Env = Record<string, string | undefined>;
 
+/** The day he started fresh. The calendar was an everyday one before, so earlier events are noise. */
+export const TRACKING_STARTED: Day = "2026-10-20";
+
 /**
- * The first gig date the app tracks, from TRACK_FROM. Events before it are ignored and
- * removed, for calendars that were once used for other things. Null means everything.
+ * The first gig date the app tracks. Events before it are ignored and removed. TRACK_FROM
+ * overrides TRACKING_STARTED with another date, or "all" for everything (null).
  */
 export function trackFrom(env: Env = process.env): Day | null {
   const value = env.TRACK_FROM?.trim();
-  if (!value) return null;
+  if (!value) return TRACKING_STARTED;
+  if (value.toLowerCase() === "all") return null;
   if (!isDay(value)) throw new Error(`TRACK_FROM must be a date like 2025-01-01, not "${value}"`);
   return value;
 }

@@ -212,12 +212,12 @@ export default async function StatusPage() {
           <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
           <Fact
             label="Tracking gigs from"
-            value={from ?? "The start"}
+            value={from ?? "Everything"}
             note={
               fromProblem ??
               (from
-                ? "Set by TRACK_FROM. Events before this date are ignored, so old titles don't mix up names and places."
-                : "Set TRACK_FROM to a date like 2025-01-01 to ignore events from before it.")
+                ? "Events before this date are ignored, so old titles don't mix up names and places. TRACK_FROM changes it."
+                : "TRACK_FROM is set to all, so every event is read.")
             }
           />
         </div>

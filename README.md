@@ -84,7 +84,7 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
 ## How the app reads your gigs
 
 - **Titles** can have the name, price and place in any order, like `Kaller job 600 neemas hachaim`, `neemas hachaim 600 Kaller` or `Kaller $600 at boro park`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`. Writing `job` or `hold` is optional too.
-- **Names and places are learned** from all his titles. Once `neemas hachaim` has been a place in one title, it's read as the place wherever it shows up. For a name or place the app hasn't seen yet, put `at` before the place (`Shmuli 500 at Ateres Chynka`) or a comma between them, or keep the old order with the name first. Every sync re-reads all the titles, so old entries pick up what it learns. If the calendar was once used for everyday things, set `TRACK_FROM` (see below) so those old titles don't teach it wrong names and places.
+- **Names and places are learned** from all his titles. Once `neemas hachaim` has been a place in one title, it's read as the place wherever it shows up. For a name or place the app hasn't seen yet, put `at` before the place (`Shmuli 500 at Ateres Chynka`) or a comma between them, or keep the old order with the name first. Every sync re-reads all the titles, so old entries pick up what it learns. Only events from October 20, 2026 on are read, because the calendar was an everyday one before that and those old titles would teach it wrong names and places. `TRACK_FROM` (see below) changes the date.
 - **The calendar decides** whether something is a job or a hold. If the title says `job` or `hold` and disagrees, the event shows up under **Needs attention** at the bottom of the dashboard.
 - **The dashboard** is one page. The filters at the top (dates, person, place, how far ahead) apply to everything on it. The tiles count jobs, holds and wanted dates; the charts and the booked-ahead numbers (shortest, typical, average, longest) count booked jobs only.
 - **Each person's numbers:** pick someone under **Filter → Person** to see their card: what they usually pay (the typical price, with their lowest, highest and average), jobs played and coming up, money earned, how far ahead they book, their last and next gig, how often their holds became jobs, and where they usually book him.
@@ -116,7 +116,7 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
 | `DASHBOARD_PASSWORD` | yes | Login password for the dashboard. |
 | `CRON_SECRET` | yes | Vercel sends it with the daily cron request; also part of the login cookie's signing key. |
 | `APP_TIMEZONE` | no | Time zone for dates and lead times. Default `America/New_York`. |
-| `TRACK_FROM` | no | A date like `2025-01-01`. Events before it are ignored and removed from the dashboard (never from the calendar). Use it if the calendar was once used for other things. Leave empty to read everything. |
+| `TRACK_FROM` | no | The first date read, like `2025-01-01`. Events before it are ignored and removed from the dashboard (never from the calendar). Default `2026-10-20`, when he started fresh. `all` reads everything. |
 
 ## For developers
 

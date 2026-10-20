@@ -54,7 +54,7 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
       else warnings.push(`Nothing in "${name}" was marked deleted this time, since an event couldn't be read`);
     }
 
-    // Everything before TRACK_FROM is left out, so old titles don't confuse the names and places.
+    // Everything before trackFrom() is left out, so old titles don't confuse the names and places.
     const tracked = from ? fetched.filter((event) => event.gigDate >= from) : fetched;
 
     const plan = await db.$transaction(
