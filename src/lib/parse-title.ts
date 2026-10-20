@@ -70,18 +70,33 @@ function tokenize(title: string): Token[] {
 }
 
 /** A run of words between keywords, prices, markers and punctuation. */
-type Run = { words: string[]; afterMarker: boolean; beforeKeyword: boolean; afterKeyword: boolean };
+type Run = {
+  words: string[];
+  afterMarker: boolean;
+  beforeKeyword: boolean;
+  afterKeyword: boolean;
+  /** A comma or other break came between this run and the one before. */
+  afterBreak: boolean;
+};
 
 function runsOf(tokens: Token[]): Run[] {
   const runs: Run[] = [];
   let current: Run | null = null;
   let marker = false;
   let seenKeyword = false;
+  let seenBreak = false;
   for (const token of tokens) {
     if (token.kind === "word") {
       if (!current) {
-        current = { words: [], afterMarker: marker, beforeKeyword: false, afterKeyword: seenKeyword };
+        current = {
+          words: [],
+          afterMarker: marker,
+          beforeKeyword: false,
+          afterKeyword: seenKeyword,
+          afterBreak: seenBreak && runs.length > 0,
+        };
         runs.push(current);
+        seenBreak = false;
       }
       current.words.push(token.text);
       continue;
@@ -91,6 +106,7 @@ function runsOf(tokens: Token[]): Run[] {
       seenKeyword = true;
     }
     current = null;
+    if (token.kind === "break") seenBreak = true;
     // A marker carries over a price, as in "at 600 boro park", but not past a keyword or break.
     if (token.kind === "marker") marker = true;
     else if (token.kind !== "price") marker = false;
@@ -141,12 +157,17 @@ export function buildLexicon(titles: string[]): Lexicon {
   }
 
   // Two-part titles in any order: if one part is known, the other is the opposite.
+  // If neither is, a comma between them means name first, as in "Shmuli 500, john street".
   const learned: [string[], "person" | "location"][] = [];
   for (const runs of allRuns) {
     if (runs.length !== 2) continue;
     const [a, b] = runs.map((run) => known(lexicon, run.words));
     if (a && !b) learned.push([runs[1].words, a === "person" ? "location" : "person"]);
     if (b && !a) learned.push([runs[0].words, b === "person" ? "location" : "person"]);
+    const plain = runs.every((run) => !run.afterMarker && !run.beforeKeyword && !run.afterKeyword);
+    if (!a && !b && plain && runs[1].afterBreak) {
+      learned.push([runs[0].words, "person"], [runs[1].words, "location"]);
+    }
   }
   for (const [words, as] of learned) vote(lexicon, words, as);
 

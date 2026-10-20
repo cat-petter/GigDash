@@ -199,6 +199,30 @@ describe("any order", () => {
       expect(parseTitle("Dovid Lakewood", learned)).toMatchObject({ person: "Dovid", location: "Lakewood" });
     });
 
+    it("learns name then place from a comma", () => {
+      const learned = buildLexicon(["Shmuli 500, john street"]);
+      expect(parseTitle("John street shmuli 500", learned)).toMatchObject({
+        person: "shmuli",
+        price: 500,
+        location: "John street",
+      });
+    });
+
+    it("doesn't learn from a comma when a part is already known", () => {
+      const learned = buildLexicon(["Kaller job brooklyn", "brooklyn, Moshe"]);
+      expect(parseTitle("Moshe Lakewood", learned)).toMatchObject({ person: "Moshe", location: "Lakewood" });
+      expect(parseTitle("brooklyn Kaller", learned)).toMatchObject({ person: "Kaller", location: "brooklyn" });
+    });
+
+    it.each([
+      "Shmuli 500, john street",
+      "John street shmuli 500",
+      "500 shmuli at john street",
+    ])("reads %j the same once it has seen the others", (title) => {
+      const learned = buildLexicon(["Shmuli 500, john street", "John street shmuli 500", "500 shmuli at john street"]);
+      expect(parseTitle(title, learned)).toMatchObject({ personKey: "shmuli", price: 500, locationKey: "john street" });
+    });
+
     it("flags a title that is only a known place", () => {
       expect(parseTitle("brooklyn 600", lexicon)).toEqual({ ok: false, error: "No name in the title" });
     });
