@@ -139,6 +139,8 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   const toFix = attention.unreadable.length + attention.mismatched.length + attention.recurring.length;
   const nothing = tiles.jobs === 0 && tiles.openHolds === 0 && tiles.wanted === 0;
   const onGigs = filters.tab === "gigs";
+  // Each headline opens the gigs it counts, keeping the date range and other filters.
+  const gigsHref = (change: Partial<Filters>) => withFilter(filters, { tab: "gigs", sort: "date", ...change });
 
   const overview = (
     <>
@@ -148,11 +150,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
           label="Upcoming jobs"
           value={tiles.upcomingJobs.toLocaleString("en-US")}
           sub={`${tiles.pastJobs} played · ${tiles.jobs} in all`}
+          href={gigsHref({ when: "upcoming", show: "job" })}
         />
         <StatTile
           label="Earned"
           value={formatMoney(tiles.earned)}
           sub={tiles.upcoming > 0 ? `+${formatMoney(tiles.upcoming)} coming up` : "From jobs played"}
+          href={gigsHref({ when: "past", show: "job", sort: "date-desc" })}
         />
         <StatTile
           label="Lead time"
@@ -162,6 +166,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
               ? "No booking dates yet"
               : `Typical · avg ${plural(Math.round(tiles.leadAverage ?? 0), "day")}`
           }
+          href={gigsHref({ when: "all", show: "job", sort: "lead-desc" })}
         />
         <StatTile
           label="Holds"
@@ -171,13 +176,17 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
               ? "Still open"
               : `Open · ${Math.round(tiles.holdRate * 100)}% became jobs`
           }
+          href={gigsHref({ when: "upcoming", show: "hold" })}
         />
       </div>
       {tiles.wanted > 0 && (
-        <p className="flex items-baseline justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm">
+        <FilterLink
+          href={gigsHref({ when: "all", show: "wanted" })}
+          className="flex items-baseline justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-sm transition-colors hover:border-muted active:bg-bg"
+        >
           <span>Asked, but not free</span>
           <span className="font-semibold tabular-nums">{tiles.wanted.toLocaleString("en-US")}</span>
-        </p>
+        </FilterLink>
       )}
       {(tiles.unpriced > 0 || toFix > 0) && (
         <p className="px-1 text-xs text-muted">
