@@ -77,6 +77,7 @@ describe("parseFilters", () => {
       when: "past",
       show: "hold",
       sort: "lead-desc",
+      section: "people",
     });
   });
 
@@ -137,7 +138,14 @@ describe("toQuery and withFilter", () => {
 
   it("doesn't count the tab or the Gigs tab's own choices as filters", () => {
     expect(isFiltered(filters({ tab: "gigs", when: "all", show: "job", sort: "lead" }))).toBe(false);
+    expect(isFiltered(filters({ tab: "settings", section: "rules" }))).toBe(false);
     expect(isFiltered(filters({ range: "month" }))).toBe(true);
+  });
+
+  it("reads the Settings section, falling back to People", () => {
+    expect(parseFilters({ tab: "settings", section: "places" })).toEqual(filters({ tab: "settings", section: "places" }));
+    expect(parseFilters({ section: "nope" }).section).toBe("people");
+    expect(withFilter(DEFAULT_FILTERS, { tab: "settings", section: "rules" })).toBe("/?tab=settings&section=rules");
   });
 
   it("clears the shared filters but stays on the tab", () => {

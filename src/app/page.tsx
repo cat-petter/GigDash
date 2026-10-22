@@ -7,6 +7,7 @@ import { GigsView } from "@/components/GigsView";
 import { NeedsAttention } from "@/components/NeedsAttention";
 import { FilterLink, PendingFrame, PendingProvider } from "@/components/Pending";
 import { PersonProfile } from "@/components/PersonProfile";
+import { SettingsView } from "@/components/SettingsView";
 import { StatTile } from "@/components/StatTile";
 import { SyncButton } from "@/components/SyncButton";
 import { TabBar } from "@/components/TabBar";
@@ -14,7 +15,8 @@ import { calendarNames, icloudConfigured } from "@/lib/caldav";
 import { appTimeZone, dayInZone } from "@/lib/dates";
 import { clearedFilters, type Filters, type LeadKey, monthEnd, parseFilters, withFilter } from "@/lib/filters";
 import { formatMoney, plural } from "@/lib/format";
-import { loadGigRows } from "@/lib/gigs";
+import { loadGigs } from "@/lib/gigs";
+import type { Names } from "@/lib/names";
 import { autoSync, syncStatus } from "@/lib/run-sync";
 import { requireLogin } from "@/lib/session";
 import {
@@ -55,6 +57,12 @@ function leadHref(filters: Filters, lead: LeadKey): string {
   return withFilter(filters, { tab: "gigs", lead, when: "all", show: "job", sort: "lead" });
 }
 
+/** An old link may name one spelling ("kaler"); it now means whoever that spelling belongs to. */
+function groupId(names: Names, key: string | null): string | null {
+  if (key === null || names.groups.some((group) => group.id === key)) return key;
+  return names.byKey.get(key)?.id ?? key;
+}
+
 function Notice({ children }: { children: React.ReactNode }) {
   return <p className="rounded-xl border border-warn/40 px-3 py-2 text-sm text-warn">{children}</p>;
 }
@@ -62,7 +70,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 export default async function Dashboard({ searchParams }: PageProps<"/">) {
   await requireLogin("/");
   await connection();
-  const filters = parseFilters(await searchParams);
+  const asked = parseFilters(await searchParams);
 
   let timeZone = "America/New_York";
   let zoneProblem = false;
@@ -76,8 +84,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   if (connected) await autoSync(2000);
 
   const now = new Date();
-  const [rows, sync] = await Promise.all([loadGigRows(), syncStatus(now)]);
+  const [{ rows, people, places, rules }, sync] = await Promise.all([loadGigs(), syncStatus(now)]);
   const today = dayInZone(now, timeZone);
+  const filters: Filters = {
+    ...asked,
+    person: groupId(people, asked.person),
+    location: groupId(places, asked.location),
+  };
 
   const header = (
     <header className="flex items-start justify-between gap-4">
@@ -138,7 +151,6 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
 
   const toFix = attention.unreadable.length + attention.mismatched.length + attention.recurring.length;
   const nothing = tiles.jobs === 0 && tiles.openHolds === 0 && tiles.wanted === 0;
-  const onGigs = filters.tab === "gigs";
   // Each headline opens the gigs it counts, keeping the date range and other filters.
   const gigsHref = (change: Partial<Filters>) => withFilter(filters, { tab: "gigs", sort: "date", ...change });
 
@@ -251,9 +263,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
       {header}
       {notices}
       <PendingProvider>
-        <FilterBar filters={filters} people={options.people} locations={options.locations} />
+        {filters.tab !== "settings" && (
+          <FilterBar filters={filters} people={options.people} locations={options.locations} />
+        )}
         <PendingFrame>
-          {onGigs ? (
+          {filters.tab === "settings" ? (
+            <SettingsView filters={filters} people={people} places={places} rules={rules} />
+          ) : filters.tab === "gigs" ? (
             <GigsView gigs={gigList(rows, filters, today)} filters={filters} today={today} timeZone={timeZone} />
           ) : nothing ? (
             <Card title="Nothing matches these filters">

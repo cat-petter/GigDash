@@ -1,0 +1,55 @@
+import { type Filters, SECTIONS, withFilter } from "@/lib/filters";
+import { plural } from "@/lib/format";
+import type { MatchRules, NameKind, Names } from "@/lib/names";
+import { Card } from "./Card";
+import { NamesManager } from "./NamesManager";
+import { RulesForm } from "./RulesForm";
+import { Segmented } from "./Segmented";
+
+/** "14 people from 22 spellings" */
+function summary(names: Names, one: string, many: string): string {
+  const groups = names.groups.filter((group) => group.count > 0);
+  const spellings = groups.reduce((total, group) => total + group.spellings.filter((s) => s.count > 0).length, 0);
+  return `${plural(groups.length, one, many)} from ${plural(spellings, "spelling")}`;
+}
+
+/** The Settings tab: who's who, where's where, and the rules that work it out. */
+export function SettingsView({
+  filters,
+  people,
+  places,
+  rules,
+}: {
+  filters: Filters;
+  people: Names;
+  places: Names;
+  rules: Record<NameKind, MatchRules>;
+}) {
+  return (
+    <>
+      <Segmented
+        label="Settings"
+        options={SECTIONS}
+        current={filters.section}
+        hrefOf={(section) => withFilter(filters, { section })}
+      />
+      {filters.section === "people" && <NamesManager kind="person" groups={people.groups} filters={filters} />}
+      {filters.section === "places" && <NamesManager kind="place" groups={places.groups} filters={filters} />}
+      {filters.section === "rules" && (
+        <>
+          <p className="px-1 text-sm text-muted">
+            Names are often written a few ways. These rules decide which spellings are the same person or place, and
+            the one written most is how it shows. Anything you set by hand under People or Places stays as you set
+            it. Changes show everywhere right away; the calendar isn&apos;t changed.
+          </p>
+          <Card title="People" note={summary(people, "person", "people")}>
+            <RulesForm kind="person" rules={rules.person} />
+          </Card>
+          <Card title="Places" note={summary(places, "place", "places")}>
+            <RulesForm kind="place" rules={rules.place} />
+          </Card>
+        </>
+      )}
+    </>
+  );
+}

@@ -54,6 +54,18 @@ const PEOPLE = [
   ["Mendlowitz", 1, "Terrace"],
 ] as const;
 const LOCATIONS = [...new Set(PEOPLE.map(([, , location]) => location))];
+// Other ways he writes some of them, for Settings → People and Places to put together.
+const SPELLINGS: Record<string, string[]> = {
+  Kaller: ["kaller", "Kaler"],
+  "Yitsy korblue": ["Yitzy Korblue"],
+  Friedman: ["Fridman"],
+  Goldstein: ["Goldstien"],
+  Schwartz: ["Shwartz"],
+  lakewood: ["Lakewood", "lakewod"],
+  "Boro Park": ["Boropark"],
+  "neemas hachaim": ["Neimas Hachaim"],
+};
+const spelled = (name: string) => (SPELLINGS[name] && chance(0.2) ? pick(SPELLINGS[name]) : name);
 const PRICES = [450, 500, 600, 600, 650, 750, 800, 800, 900, 1000, 1200, 1500, 1800, 2200];
 
 function priceText(price: number): string {
@@ -162,22 +174,28 @@ async function main() {
       if (!confirmedAt) status = "hold";
     }
 
-    const location = weighted([
+    const where = weighted([
       [usual, 60],
       [pick(LOCATIONS), 30],
       [null, 10],
     ]);
     const priced = bookedAt && bookedAt >= dayToDate(pricesFrom) ? chance(0.85) : chance(0.05);
     const keyword = status === "hold" && chance(0.2) ? "on hold" : status;
-    // Now and then he types a name in lowercase.
-    const name = person === "Kaller" && chance(0.15) ? "kaller" : person;
+    const name = spelled(person);
+    const location = where && spelled(where);
     const title = [name, keyword, priced ? priceText(pick(PRICES)) : null, location].filter(Boolean).join(" ");
 
     add({ title, gigDate, status, bookedAt, heldAt, confirmedAt, deletedAt });
   }
 
-  // Events for "Needs attention".
   const recent = (daysAgo: number) => timeOn(addDays(today, -daysAgo));
+
+  // A few more spellings, so each rule has something to match.
+  add({ title: "Stern job 900 Boropark", gigDate: addDays(today, -45), status: "job", bookedAt: recent(80) });
+  add({ title: "Halpern job 700 lakewod", gigDate: addDays(today, 33), status: "job", bookedAt: recent(14) });
+  add({ title: "R' Kaller job 650 neemas hachaim", gigDate: addDays(today, -12), status: "job", bookedAt: recent(50) });
+
+  // Events for "Needs attention".
   add({ title: "Weiss wedding", gigDate: addDays(today, 40), status: "job", bookedAt: recent(12) });
   add({ title: "Katz 800 brooklyn", gigDate: addDays(today, -30), status: "job", bookedAt: recent(70) });
   add({ title: "Stern bar mitzvah Eden Palace", gigDate: addDays(today, 95), status: "hold", bookedAt: recent(5) });
@@ -191,7 +209,7 @@ async function main() {
     recurring: true,
   });
 
-  await db.$transaction([db.gig.deleteMany(), db.syncRun.deleteMany(), db.gig.createMany({ data: gigs })]);
+  await db.$transaction([db.gig.deleteMany(), db.syncRun.deleteMany(), db.savedName.deleteMany(), db.matchRule.deleteMany(), db.gig.createMany({ data: gigs })]);
 
   const live = gigs.filter((gig) => !gig.deletedAt);
   const startedAt = new Date(now.getTime() - 4 * 60 * 1000);

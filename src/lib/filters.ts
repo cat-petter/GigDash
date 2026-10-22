@@ -4,12 +4,14 @@ export type RangeKey = "all" | "month" | "year" | "12m" | "custom";
 /** Which calendar a gig is in. "wanted" means he was asked but wasn't free. */
 export type Status = "job" | "hold" | "wanted";
 export type LeadKey = "lt1w" | "1to4w" | "1to3m" | "3m";
-export type TabKey = "overview" | "gigs";
+export type TabKey = "overview" | "gigs" | "settings";
 /** Gigs tab: which gigs by date. */
 export type WhenKey = "upcoming" | "past" | "all";
 /** Gigs tab: booked and on hold together, or one calendar. */
 export type ShowKey = "gigs" | Status;
 export type SortKey = "date" | "date-desc" | "lead" | "lead-desc" | "price-desc" | "price";
+/** Settings tab: which list to manage. */
+export type SectionKey = "people" | "places" | "rules";
 
 export const RANGES: { key: RangeKey; label: string }[] = [
   { key: "all", label: "All time" },
@@ -22,6 +24,7 @@ export const RANGES: { key: RangeKey; label: string }[] = [
 export const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "gigs", label: "Gigs" },
+  { key: "settings", label: "Settings" },
 ];
 
 export const WHENS: { key: WhenKey; label: string }[] = [
@@ -44,6 +47,12 @@ export const SORTS: { key: SortKey; label: string }[] = [
   { key: "lead-desc", label: "Lead time: longest first" },
   { key: "price-desc", label: "Price: highest first" },
   { key: "price", label: "Price: lowest first" },
+];
+
+export const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: "people", label: "People" },
+  { key: "places", label: "Places" },
+  { key: "rules", label: "Rules" },
 ];
 
 /** Lead-time buckets, in days. `max` is inclusive; null means no upper limit. */
@@ -72,6 +81,8 @@ export type Filters = {
   when: WhenKey;
   show: ShowKey;
   sort: SortKey;
+  /** Only applies to the Settings tab. */
+  section: SectionKey;
 };
 
 export const DEFAULT_FILTERS: Filters = {
@@ -85,6 +96,7 @@ export const DEFAULT_FILTERS: Filters = {
   when: "upcoming",
   show: "gigs",
   sort: "date",
+  section: "people",
 };
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -122,6 +134,7 @@ export function parseFilters(params: SearchParams): Filters {
     when: oneOf(first(params.when), WHENS) ?? DEFAULT_FILTERS.when,
     show: oneOf(first(params.show), SHOWS) ?? DEFAULT_FILTERS.show,
     sort: oneOf(first(params.sort), SORTS) ?? DEFAULT_FILTERS.sort,
+    section: oneOf(first(params.section), SECTIONS) ?? DEFAULT_FILTERS.section,
   };
 }
 
@@ -136,7 +149,7 @@ export function toQuery(filters: Filters): string {
   if (filters.person) params.set("person", filters.person);
   if (filters.location) params.set("location", filters.location);
   if (filters.lead) params.set("lead", filters.lead);
-  for (const key of ["tab", "when", "show", "sort"] as const) {
+  for (const key of ["tab", "when", "show", "sort", "section"] as const) {
     if (filters[key] !== DEFAULT_FILTERS[key]) params.set(key, filters[key]);
   }
   return params.toString();
@@ -155,8 +168,8 @@ export function clearedFilters(filters: Filters): Filters {
 
 /** Whether a filter shared by both tabs differs from the default. */
 export function isFiltered(filters: Filters): boolean {
-  const { tab, when, show, sort } = DEFAULT_FILTERS;
-  return toQuery({ ...filters, tab, when, show, sort }) !== "";
+  const { tab, when, show, sort, section } = DEFAULT_FILTERS;
+  return toQuery({ ...filters, tab, when, show, sort, section }) !== "";
 }
 
 /** How many filters besides the date range are set. */

@@ -86,14 +86,18 @@ To change a setting later, open the project in Vercel, go to **Settings** → **
 - **Titles** can have the name, price and place in any order, like `Kaller job 600 neemas hachaim`, `neemas hachaim 600 Kaller` or `Kaller $600 at boro park`. The price is optional and can be written `600`, `$600`, `1,200` or `1.5k`. Writing `job` or `hold` is optional too.
 - **Names and places are learned** from all his titles. Once `neemas hachaim` has been a place in one title, it's read as the place wherever it shows up. For a name or place the app hasn't seen yet, put `at` before the place (`Shmuli 500 at Ateres Chynka`) or a comma between them, or keep the old order with the name first. Every sync re-reads all the titles, so old entries pick up what it learns. Only events from October 20, 2026 on are read, because the calendar was an everyday one before that and those old titles would teach it wrong names and places. `TRACK_FROM` (see below) changes the date.
 - **The calendar decides** whether something is a job or a hold. If the title says `job` or `hold` and disagrees, the event shows up under **Needs attention** at the bottom of the dashboard.
-- **The dashboard** has two tabs at the bottom. The filters at the top (dates, person, place, lead time) apply to both, and stay set when you switch. The date range starts on **All time**; **This month** shows where you need to be this month.
+- **The dashboard** has three tabs at the bottom. The filters at the top (dates, person, place, lead time) apply to Overview and Gigs, and stay set when you switch. The date range starts on **All time**; **This month** shows where you need to be this month.
   - **Overview** has the numbers. The tiles count jobs, holds and wanted dates; the charts and the lead-time numbers (shortest, typical, average, longest) count booked jobs only. Tap a tile to see the gigs it counts: **Upcoming jobs**, **Holds**, **Earned** (jobs played, latest first), **Lead time** (longest first) and **Asked, but not free**. Tap a bar in **Lead time** to see those jobs, shortest lead time first, or a month in **Jobs by month** to see that month's jobs, soonest first.
   - **Gigs** has a card for each gig: the date, person, place, price, whether it's booked or on hold, its lead time and how soon it is. Choose **Upcoming**, **Completed** or **All**, which calendar to show, and how to sort (date, lead time or price, either way).
+  - **Settings** has **People**, **Places** and **Rules**. See Names and places below.
 - **Lead time** is how far ahead a gig was booked: from the day the event was made to the day of the gig. For a hold that became a job, it counts from when the hold was made, as long as the event was moved into Gigs rather than made again; the card also shows how far ahead it was confirmed.
 - **Each person's numbers:** pick someone under **Filter → Person** to see their card: what they usually pay (the typical price, with their lowest, highest and average), jobs played and coming up, money earned, how far ahead they book, their last and next gig, how often their holds became jobs, and where they usually book him.
 - **Wanted dates** are for when someone asks and he isn't free. Put them in a calendar named `Wanted`, written like any other title (`Kaller 800 boro park`). They're left out of jobs, holds and money, and shown on their own as a count on the dashboard and on each person's card. The calendar is optional; nothing changes until it exists.
 - **When a hold is confirmed**, move the event into Gigs rather than making a new one. That's how the app knows the hold became a job, and when.
-- **Names** are grouped without caring about capitals, so `Kaller` and `kaller` count as one person. Typos like `Kallr` count as a different person.
+- **Names and places** are often written a few ways (`Kaller`, `Kaler`, `R' Kaller`). The app puts spellings that match into one person or place, shown as the spelling he writes most. Nothing in the calendar changes.
+  - **Settings → Rules** decides what counts as a match, separately for people and places: ignore spaces and punctuation, word order, double letters, letters that sound the same (`Friedman` = `Fridman`, `Schwartz` = `Shvartz`), one typo in a name of 5 or more letters, and a list of words to leave out (`mr`, `rabbi`, `the`). **Back to defaults** undoes changes.
+  - **Settings → People** (and **Places**) lists each one with the ways it's written. Tap one to change how it shows (**Show as**), move a spelling to someone else or to a new person of its own, or merge it into another person. Whatever you set by hand stays that way even if the rules change; new spellings that match still join it. **Let the rules decide again** forgets what was set by hand for that one.
+  - Changes show on every tab right away, with no sync needed.
 - **Titles it can't read** show up under **Needs attention**. Fix the title in Calendar and the next sync picks it up.
 - **Syncing** happens once a day early in the morning (New York time), whenever you open the dashboard (if the last sync was more than 10 minutes ago), and when you tap **Sync now**.
 
@@ -137,7 +141,7 @@ npm run seed:demo      # ~150 made-up gigs (see below)
 npm run dev
 ```
 
-`seed:demo` deletes every gig and sync run first. It refuses to run against a database that isn't on this computer unless you pass `--force`: `npm run seed:demo -- --force`.
+`seed:demo` deletes every gig, sync run, saved name and rule first. It refuses to run against a database that isn't on this computer unless you pass `--force`: `npm run seed:demo -- --force`.
 
 Without `ICLOUD_EMAIL` and `ICLOUD_APP_PASSWORD`, the dashboard shows whatever is in the database and doesn't try to sync.
 
@@ -157,9 +161,10 @@ npm run build
   - `sync.ts`: the pure sync planner.
   - `run-sync.ts`: applies the plan and records a `SyncRun`.
   - `stats.ts`, `filters.ts`: dashboard numbers and URL filters.
+  - `names.ts`: pure spelling matching (`matchKey`, `groupNames`); `names-store.ts`: saved names and rules in the database; `gigs.ts`: loads the gigs with each spelling swapped for its person or place.
   - `auth.ts`, `session.ts`: the signed login cookie.
 - `src/proxy.ts`: sends anyone without a valid cookie to `/login`. It skips `/api/`, because `/api/sync` checks the cron secret or the cookie itself.
-- `src/app/`: the dashboard (`page.tsx`), `/status`, `/login`, `/api/sync`, the manifest and the icons.
+- `src/app/`: the dashboard (`page.tsx`), its server actions for Settings (`names-actions.ts`, each checks the login), `/status`, `/login`, `/api/sync`, the manifest and the icons.
 - `scripts/seed-demo.ts`, `scripts/vercel-build.sh`.
 
 ### Database changes

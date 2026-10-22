@@ -1,7 +1,8 @@
 "use client";
 
 import { type Filters, SHOWS, type ShowKey, SORTS, type SortKey, WHENS, withFilter } from "@/lib/filters";
-import { FilterLink, usePending } from "./Pending";
+import { usePending } from "./Pending";
+import { Segmented } from "./Segmented";
 
 function Select<T extends string>({
   label,
@@ -41,24 +42,12 @@ export function GigControls({ filters }: { filters: Filters }) {
   const go = (change: Partial<Filters>) => navigate(withFilter(filters, change), { scroll: false });
   return (
     <div className="space-y-2">
-      <div role="group" aria-label="Which gigs" className="grid grid-cols-3 gap-1 rounded-xl bg-line/60 p-1">
-        {WHENS.map((when) => {
-          const current = filters.when === when.key;
-          return (
-            <FilterLink
-              key={when.key}
-              href={withFilter(filters, { when: when.key })}
-              scroll={false}
-              aria-current={current ? "true" : undefined}
-              className={`rounded-lg py-1.5 text-center text-sm font-medium ${
-                current ? "bg-surface shadow-sm" : "text-muted"
-              }`}
-            >
-              {when.label}
-            </FilterLink>
-          );
-        })}
-      </div>
+      <Segmented
+        label="Which gigs"
+        options={WHENS}
+        current={filters.when}
+        hrefOf={(when) => withFilter(filters, { when })}
+      />
       <div className="flex gap-2">
         <Select<ShowKey> label="Show" value={filters.show} options={SHOWS} onChange={(show) => go({ show })} />
         <Select<SortKey> label="Sort by" value={filters.sort} options={SORTS} onChange={(sort) => go({ sort })} />

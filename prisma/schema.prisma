@@ -77,3 +77,43 @@ model SyncRun {
   /// Fetched events without a CREATED timestamp, i.e. with no booking date from Apple.
   missingCreated Int       @default(0)
 }
+
+enum NameKind {
+  person
+  place
+}
+
+/// A person or place saved by hand: renamed, merged or split in Settings. People and
+/// places nobody touched aren't stored; the matching rules work them out each time.
+model SavedName {
+  id        String           @id @default(cuid())
+  kind      NameKind
+  /// How it shows in the app. Null means the spelling used most.
+  label     String?
+  spellings PinnedSpelling[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+/// A spelling (a Gig's personKey or locationKey) that stays with a saved name, whatever the rules say.
+model PinnedSpelling {
+  kind        NameKind
+  key         String
+  savedNameId String
+  savedName   SavedName @relation(fields: [savedNameId], references: [id], onDelete: Cascade)
+
+  @@id([kind, key])
+  @@index([savedNameId])
+}
+
+/// How spellings are matched, one row per kind. A missing row means the defaults.
+model MatchRule {
+  kind          NameKind @id
+  punctuation   Boolean
+  wordOrder     Boolean
+  doubleLetters Boolean
+  soundAlike    Boolean
+  oneLetterOff  Boolean
+  ignoreWords   String[]
+  updatedAt     DateTime @updatedAt
+}
