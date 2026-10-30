@@ -20,9 +20,7 @@ import {
   leaders,
   type Profile,
   profile,
-  rankPeople,
   rankPeriods,
-  rankPlaces,
   type Top,
 } from "@/lib/stats";
 import { Card } from "./Card";
@@ -59,26 +57,6 @@ function Headline({ label, top, value, href }: { label: string; top: Top | null;
       <p className="shrink-0 text-right font-semibold tabular-nums">{value}</p>
       {arrow}
     </FilterLink>
-  );
-}
-
-/** Everyone (or everywhere) by jobs, each opening their card. */
-function RankList({ title, tops, hrefOf }: { title: string; tops: Top[]; hrefOf: (top: Top) => string }) {
-  if (tops.length === 0) return null;
-  return (
-    <Card title={title} note="Most jobs first. Tap one for its stats.">
-      <ul className="-mx-4 -mb-4 divide-y divide-line border-t border-line">
-        {tops.map((top) => (
-          <li key={top.key}>
-            <FilterLink href={hrefOf(top)} className="flex items-baseline gap-3 px-4 py-2.5 text-sm active:bg-bg">
-              <span className="min-w-0 flex-1 truncate">{top.label}</span>
-              <span className="text-muted tabular-nums">{plural(top.jobs, "gig")}</span>
-              <span className="w-16 text-right font-medium tabular-nums">{top.money ? formatMoney(top.money) : "—"}</span>
-            </FilterLink>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }
 
@@ -396,16 +374,6 @@ export function StatsView({
           href={linkTo({ tab: "stats", card: "busiest" })}
         />
       </div>
-      <RankList
-        title="Locations"
-        tops={rankPlaces(rows)}
-        hrefOf={(place) => linkTo({ tab: "stats", card: "location", location: place.key })}
-      />
-      <RankList
-        title="Musicians"
-        tops={rankPeople(rows)}
-        hrefOf={(person) => linkTo({ tab: "stats", card: "musician", person: person.key })}
-      />
     </>
   );
 }
