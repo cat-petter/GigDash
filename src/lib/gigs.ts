@@ -13,13 +13,14 @@ export type GigData = {
 };
 
 /**
- * Every gig, with each spelling of a name or place swapped for the person or place it
+ * The user's gigs, with each spelling of a name or place swapped for the person or place it
  * belongs to: `person` and `location` become how they show in the app, and `personKey`
  * and `locationKey` the id the filters use.
  */
-export async function loadGigs(): Promise<GigData> {
+export async function loadGigs(userId: string): Promise<GigData> {
   const [gigs, saved, rules] = await Promise.all([
     db.gig.findMany({
+      where: { userId },
       select: {
         uid: true,
         rawTitle: true,
@@ -39,8 +40,8 @@ export async function loadGigs(): Promise<GigData> {
         deletedAt: true,
       },
     }),
-    loadSavedNames(),
-    loadRules(),
+    loadSavedNames(userId),
+    loadRules(userId),
   ]);
   const spelled: GigRow[] = gigs.map(({ rawTitle, gigDate, deletedAt, ...gig }) => ({
     ...gig,

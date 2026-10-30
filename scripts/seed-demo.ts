@@ -1,6 +1,6 @@
 /**
  * Fills the database with about 150 made-up gigs, so the dashboard can be built
- * and demoed without an iCloud account. It deletes every existing gig and sync first.
+ * and demoed without an iCloud account. It deletes the owner's gigs, syncs and names first.
  *
  *   npm run seed:demo            # local databases only
  *   npm run seed:demo -- --force # any database (this wipes it)
@@ -9,6 +9,7 @@ import "dotenv/config";
 import type { Prisma } from "../src/generated/prisma/client";
 import { addDays, appTimeZone, dayInZone, daysBetween, dayToDate, type Day } from "../src/lib/dates";
 import { db } from "../src/lib/db";
+import { OWNER_ID } from "../src/lib/owner";
 import { parseTitle } from "../src/lib/parse-title";
 
 const COUNT = 150;
@@ -117,6 +118,7 @@ async function main() {
     const leadDays = bookedAt ? daysBetween(dayInZone(bookedAt, timeZone), options.gigDate) : null;
     const firstSeenAt = bookedAt && bookedAt > firstSync ? bookedAt : firstSync;
     gigs.push({
+      userId: OWNER_ID,
       uid: `demo-${gigs.length + 1}@gigdash`,
       rawTitle: options.title,
       calendar: options.status === "job" ? "gigs" : "holds",
@@ -209,12 +211,21 @@ async function main() {
     recurring: true,
   });
 
-  await db.$transaction([db.gig.deleteMany(), db.syncRun.deleteMany(), db.savedName.deleteMany(), db.matchRule.deleteMany(), db.gig.createMany({ data: gigs })]);
+  // The demo data belongs to the owner the migrations made; only the owner's rows are replaced.
+  const mine = { where: { userId: OWNER_ID } };
+  await db.$transaction([
+    db.gig.deleteMany(mine),
+    db.syncRun.deleteMany(mine),
+    db.savedName.deleteMany(mine),
+    db.matchRule.deleteMany(mine),
+    db.gig.createMany({ data: gigs }),
+  ]);
 
   const live = gigs.filter((gig) => !gig.deletedAt);
   const startedAt = new Date(now.getTime() - 4 * 60 * 1000);
   await db.syncRun.create({
     data: {
+      userId: OWNER_ID,
       startedAt,
       finishedAt: new Date(startedAt.getTime() + 2300),
       ok: true,

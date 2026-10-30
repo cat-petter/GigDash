@@ -3,8 +3,8 @@ import { type Day, dayInZone, dayToDate, daysBetween } from "./dates";
 import type { IcsEvent } from "./ics";
 import { buildLexicon, type Lexicon, parseTitle } from "./parse-title";
 
-/** A Gig row without the columns the database fills in. */
-export type GigData = Omit<Gig, "id" | "createdAt" | "updatedAt">;
+/** A Gig row without the columns the database fills in, or whose it is (runSync adds that). */
+export type GigData = Omit<Gig, "id" | "userId" | "createdAt" | "updatedAt">;
 
 export type FetchedEvent = IcsEvent & { calendar: GigCalendar };
 

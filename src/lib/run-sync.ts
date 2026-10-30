@@ -10,16 +10,16 @@ import { type FetchedEvent, planSync } from "./sync";
 export const AUTO_SYNC_AFTER_MS = 10 * 60 * 1000;
 /** A run that hasn't finished after this long is assumed to have crashed. */
 const PENDING_MS = 2 * 60 * 1000;
-/** Any fixed number, so that two syncs at once take turns writing. */
+/** Any fixed number. With the user, it makes one user's syncs take turns writing, while different users' run at once. */
 const LOCK_ID = 7231;
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Fetches both calendars and brings the Gig rows in line, recording a SyncRun. */
-export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncRun> {
-  const run = await db.syncRun.create({ data: {} });
+/** Fetches the user's calendars and brings their Gig rows in line, recording a SyncRun. */
+export async function runSync(userId: string, fetchCalendars = fetchGigCalendars): Promise<SyncRun> {
+  const run = await db.syncRun.create({ data: { userId } });
   try {
     const timeZone = appTimeZone();
     const names = calendarNames();
@@ -59,20 +59,20 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
 
     const plan = await db.$transaction(
       async (tx) => {
-        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${LOCK_ID})`);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_ID}::int, hashtext(${userId}))`;
         const now = new Date();
-        const backfill = (await tx.syncRun.count({ where: { ok: true } })) === 0;
-        if (from) await tx.gig.deleteMany({ where: { gigDate: { lt: dayToDate(from) } } });
-        const existing = await tx.gig.findMany();
+        const backfill = (await tx.syncRun.count({ where: { userId, ok: true } })) === 0;
+        if (from) await tx.gig.deleteMany({ where: { userId, gigDate: { lt: dayToDate(from) } } });
+        const existing = await tx.gig.findMany({ where: { userId } });
         const plan = planSync({ fetched: tracked, existing, fetchedCalendars, keepUids, backfill, now, timeZone });
 
-        if (plan.create.length > 0) await tx.gig.createMany({ data: plan.create });
-        for (const { uid, data } of plan.update) await tx.gig.update({ where: { uid }, data });
+        if (plan.create.length > 0) await tx.gig.createMany({ data: plan.create.map((row) => ({ ...row, userId })) });
+        for (const { uid, data } of plan.update) await tx.gig.update({ where: { userId_uid: { userId, uid } }, data });
         if (plan.seen.length > 0) {
-          await tx.gig.updateMany({ where: { uid: { in: plan.seen } }, data: { lastSeenAt: now } });
+          await tx.gig.updateMany({ where: { userId, uid: { in: plan.seen } }, data: { lastSeenAt: now } });
         }
         if (plan.delete.length > 0) {
-          await tx.gig.updateMany({ where: { uid: { in: plan.delete } }, data: { deletedAt: now } });
+          await tx.gig.updateMany({ where: { userId, uid: { in: plan.delete } }, data: { deletedAt: now } });
         }
         return plan;
       },
@@ -100,12 +100,12 @@ export async function runSync(fetchCalendars = fetchGigCalendars): Promise<SyncR
   }
 }
 
-export function latestRun(): Promise<SyncRun | null> {
-  return db.syncRun.findFirst({ orderBy: { startedAt: "desc" } });
+export function latestRun(userId: string): Promise<SyncRun | null> {
+  return db.syncRun.findFirst({ where: { userId }, orderBy: { startedAt: "desc" } });
 }
 
-export function lastGoodRun(): Promise<SyncRun | null> {
-  return db.syncRun.findFirst({ where: { ok: true }, orderBy: { startedAt: "desc" } });
+export function lastGoodRun(userId: string): Promise<SyncRun | null> {
+  return db.syncRun.findFirst({ where: { userId, ok: true }, orderBy: { startedAt: "desc" } });
 }
 
 export function isPending(run: SyncRun | null, now = new Date()): boolean {
@@ -113,8 +113,8 @@ export function isPending(run: SyncRun | null, now = new Date()): boolean {
 }
 
 /** What the Sync now button needs to show. */
-export async function syncStatus(now = new Date()) {
-  const [latest, good] = await Promise.all([latestRun(), lastGoodRun()]);
+export async function syncStatus(userId: string, now = new Date()) {
+  const [latest, good] = await Promise.all([latestRun(userId), lastGoodRun(userId)]);
   return {
     lastSyncedAt: good?.finishedAt?.toISOString() ?? null,
     running: isPending(latest, now),
@@ -128,17 +128,17 @@ export async function syncStatus(now = new Date()) {
  * Returns the finished run, or null if it's still going. It keeps running after
  * the response is sent.
  */
-export async function startSync(waitMs: number): Promise<SyncRun | null> {
-  if (isPending(await latestRun())) return null;
-  const running = runSync();
+export async function startSync(userId: string, waitMs: number): Promise<SyncRun | null> {
+  if (isPending(await latestRun(userId))) return null;
+  const running = runSync(userId);
   after(() => running);
   const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), waitMs));
   return Promise.race([running, timeout]);
 }
 
 /** Syncs when the dashboard opens, if the last sync is more than 10 minutes old. */
-export async function autoSync(waitMs = 2000): Promise<void> {
-  const last = await latestRun();
+export async function autoSync(userId: string, waitMs = 2000): Promise<void> {
+  const last = await latestRun(userId);
   if (last && Date.now() - last.startedAt.getTime() < AUTO_SYNC_AFTER_MS) return;
-  await startSync(waitMs);
+  await startSync(userId, waitMs);
 }

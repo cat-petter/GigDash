@@ -7,6 +7,102 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Someone with a login. User, Session, Account and Verification are Better Auth's tables
+/// (their fields come from better-auth's getAuthTables); the fields after `updatedAt` are ours.
+model User {
+  id            String           @id
+  name          String
+  email         String           @unique
+  emailVerified Boolean          @default(false)
+  image         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @default(now()) @updatedAt
+  /// Sees the list of users. The one who had the app before accounts existed.
+  isOwner       Boolean          @default(false)
+  /// The zone lead times and "today" are counted in.
+  timeZone      String           @default("America/New_York")
+  /// The first gig date tracked; earlier events are ignored and removed. Null means everything.
+  trackFrom     DateTime?        @db.Date
+  sessions      Session[]
+  accounts      Account[]
+  calendar      CalendarAccount?
+  gigs          Gig[]
+  syncRuns      SyncRun[]
+  savedNames    SavedName[]
+  pinned        PinnedSpelling[]
+  matchRules    MatchRule[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+/// Holds magic-link tokens until they're used or expire.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+}
+
+/// Better Auth's rate-limit counters, kept in Postgres so they hold across Vercel's instances.
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+/// Where a user's gigs come from: their iCloud login and the names of their calendars.
+model CalendarAccount {
+  userId            String   @id
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icloudEmail       String
+  /// The app-specific password, AES-GCM encrypted. Never sent to the browser.
+  icloudPasswordEnc String
+  /// Which CREDENTIALS_KEY encrypted it, so the key can be replaced.
+  keyVersion        Int
+  gigsCalendar      String   @default("Gigs")
+  /// Null means there's no holds calendar yet.
+  holdsCalendar     String?
+  /// Read only if it exists.
+  wantedCalendar    String   @default("Wanted")
+  updatedAt         DateTime @updatedAt
+}
+
 enum GigCalendar {
   gigs
   holds
@@ -22,8 +118,10 @@ enum GigStatus {
 
 model Gig {
   id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// The calendar event's UID. It stays the same when a hold is moved into Gigs.
-  uid          String      @unique
+  uid          String
   rawTitle     String
   calendar     GigCalendar
   /// Decided by which calendar the event is in, not by the title.
@@ -61,10 +159,15 @@ model Gig {
   lastSeenAt   DateTime
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  @@unique([userId, uid])
+  @@index([userId, gigDate])
 }
 
 model SyncRun {
   id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   startedAt      DateTime  @default(now())
   /// Null while the run is in progress, or if it crashed.
   finishedAt     DateTime?
@@ -76,6 +179,8 @@ model SyncRun {
   deleted        Int       @default(0)
   /// Fetched events without a CREATED timestamp, i.e. with no booking date from Apple.
   missingCreated Int       @default(0)
+
+  @@index([userId, startedAt])
 }
 
 enum NameKind {
@@ -87,28 +192,38 @@ enum NameKind {
 /// places nobody touched aren't stored; the matching rules work them out each time.
 model SavedName {
   id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind      NameKind
   /// How it shows in the app. Null means the spelling used most.
   label     String?
   spellings PinnedSpelling[]
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+
+  /// Lets PinnedSpelling's foreign key include the user, so a spelling can't be pinned to someone else's name.
+  @@unique([id, userId])
+  @@index([userId, kind])
 }
 
 /// A spelling (a Gig's personKey or locationKey) that stays with a saved name, whatever the rules say.
 model PinnedSpelling {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind        NameKind
   key         String
   savedNameId String
-  savedName   SavedName @relation(fields: [savedNameId], references: [id], onDelete: Cascade)
+  savedName   SavedName @relation(fields: [savedNameId, userId], references: [id, userId], onDelete: Cascade)
 
-  @@id([kind, key])
+  @@id([userId, kind, key])
   @@index([savedNameId])
 }
 
 /// How spellings are matched, one row per kind. A missing row means the defaults.
 model MatchRule {
-  kind          NameKind @id
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind          NameKind
   punctuation   Boolean
   wordOrder     Boolean
   doubleLetters Boolean
@@ -116,4 +231,6 @@ model MatchRule {
   oneLetterOff  Boolean
   ignoreWords   String[]
   updatedAt     DateTime @updatedAt
+
+  @@id([userId, kind])
 }

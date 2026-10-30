@@ -29,7 +29,7 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 export default async function Dashboard({ searchParams }: PageProps<"/">) {
-  await requireLogin("/");
+  const userId = await requireLogin("/");
   await connection();
   const asked = parseFilters(await searchParams);
 
@@ -42,10 +42,10 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   }
 
   const connected = icloudConfigured();
-  if (connected) await autoSync(2000);
+  if (connected) await autoSync(userId, 2000);
 
   const now = new Date();
-  const [{ rows, people, places, rules }, sync] = await Promise.all([loadGigs(), syncStatus(now)]);
+  const [{ rows, people, places, rules }, sync] = await Promise.all([loadGigs(userId), syncStatus(userId, now)]);
   const today = dayInZone(now, timeZone);
   const filters: Filters = {
     ...asked,

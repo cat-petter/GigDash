@@ -133,7 +133,7 @@ function Fact({ label, value, note }: { label: string; value: React.ReactNode; n
 }
 
 export default async function StatusPage() {
-  await requireLogin("/status");
+  const userId = await requireLogin("/status");
   await connection();
   const now = new Date();
 
@@ -154,14 +154,14 @@ export default async function StatusPage() {
     fromProblem = messageOf(error);
   }
 
-  const live = { deletedAt: null };
+  const live = { userId, deletedAt: null };
   const [runs, sync, active, noBookingDate, moved, fellThrough, unreadable] = await Promise.all([
-    db.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
-    syncStatus(now),
+    db.syncRun.findMany({ where: { userId }, orderBy: { startedAt: "desc" }, take: 10 }),
+    syncStatus(userId, now),
     db.gig.count({ where: live }),
     db.gig.count({ where: { ...live, bookedAt: null } }),
     db.gig.count({ where: { ...live, status: "job", confirmedAt: { not: null } } }),
-    db.gig.count({ where: { status: "hold", deletedAt: { not: null } } }),
+    db.gig.count({ where: { userId, status: "hold", deletedAt: { not: null } } }),
     db.gig.count({ where: { ...live, parseError: { not: null } } }),
   ]);
   const lastGood = runs.find((run) => run.ok);

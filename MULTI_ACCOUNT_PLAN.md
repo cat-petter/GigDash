@@ -69,7 +69,9 @@ Nothing is bulletproof. The aim is several layers, so no single mistake exposes 
 
 Each phase is one or more commits on `multi-account`, and `npm test` and `npm run build` pass after each.
 
-### 1. Schema and migration
+### 1. Schema and migration — done
+
+Also pulled forward, so the app builds and behaves as before: every query and the sync take a `userId`, and for now every request acts as the owner (`OWNER_ID` in `src/lib/owner.ts`, returned by `requireLogin`). That covers most of phase 4's scoping and phase 6's per-user lock and sync queries. Checked on a local copy built from `main` with demo data: every row kept and assigned to the owner, the schema matching `schema.prisma`, a second user's sync leaving the owner's gigs and rules alone, a spelling unable to be pinned to another user's name, and deleting a user removing all their rows.
 
 Better Auth's tables, generated with its CLI into `prisma/schema.prisma`: `User`, `Session`, `Account`, `Verification`, plus a `RateLimit` table. Added to `User`:
 
