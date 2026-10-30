@@ -134,7 +134,7 @@ Test it on a copy of the production database (a Neon branch) before merging: row
 - The cap counts every email sent, including the owner's email confirmation, and an email that Resend then refuses. When it's reached, sign-in says to try again tomorrow, and `/status` shows the owner "80 of 80".
 - Sync now: once a minute per user (429 with `Retry-After`, and the button says so). Syncing on open and the cron aren't counted.
 - Verified locally against the dev server and the throwaway Postgres, with Cloudflare's published test keys: no token and a rejected token both refused with no counters spent; mailbox limit, including `+tag` and case spellings; IP limit; 8 parallel requests sending exactly 3 links; the cap at 79 → 80 → refused, shown on `/status`; a window ending starts over; Sync now 200 → 429 → 200; a production server with no keys refusing links.
-- Still to check on the preview, since local requests don't come through Vercel: Better Auth only trusts `x-forwarded-for` when it holds one address. If Vercel ever sent several, everyone would share one IP bucket.
+- Verified on the preview (2026-10-30) with real Turnstile keys: no token and a forged token refused, and a full sign-in by link. Better Auth only trusts `x-forwarded-for` when it holds one address, and Vercel's requests pass that: the preview's `RateLimit` rows are keyed by IP, not `no-trusted-ip`.
 
 ### 4. Scope every query to the logged-in user
 
@@ -192,7 +192,7 @@ Code changes:
 
 ### 9. Cutover
 
-1. Buy the domain, verify it in Resend, and add it to the Vercel project.
+1. Buy the domain, verify it in Resend, and add it to the Vercel project and to the Turnstile widget's hostnames.
 2. On a Neon branch made from production: run the migration, deploy the branch as a preview pointed at it, log in with `DASHBOARD_PASSWORD`, and check the numbers match production.
 3. Add the new env vars to Production in Vercel.
 4. Take a Neon backup (or branch) of production, then merge `multi-account` into `main`. The production build runs the migration and the app keeps working: same data, same password, same iCloud env vars.
