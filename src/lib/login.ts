@@ -36,6 +36,20 @@ export function authProblem(env: Env = process.env): string | null {
   return null;
 }
 
+/**
+ * Whether sign-in links need Cloudflare's bot check. Always, except under `next dev` with no key, so
+ * links can be tried locally. A deployment missing its keys refuses links instead of skipping the check.
+ */
+export function usesTurnstile(env: Env = process.env): boolean {
+  return env.NODE_ENV !== "development" || Boolean(env.TURNSTILE_SECRET_KEY || env.TURNSTILE_SITE_KEY);
+}
+
+/** Why sign-in links can't be sent yet, or null if they can. */
+export function turnstileProblem(env: Env = process.env): string | null {
+  if (!usesTurnstile(env) || (env.TURNSTILE_SECRET_KEY && env.TURNSTILE_SITE_KEY)) return null;
+  return "TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY are both needed";
+}
+
 /** The address this deployment is reached at, which sign-in links point to. */
 export function authBaseURL(env: Env = process.env): string {
   if (env.BETTER_AUTH_URL) return env.BETTER_AUTH_URL;

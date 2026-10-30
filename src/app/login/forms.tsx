@@ -1,21 +1,31 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
+import { DAILY_CAP_CODE, LINK_LIMIT_CODE } from "@/lib/limit-codes";
+import { Turnstile } from "./turnstile";
 
 const FIELD = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-base";
 const BUTTON = "w-full rounded-full bg-fg py-2 font-medium text-bg disabled:opacity-60";
 
 /** Posts to Better Auth's routes from the browser, so its rate limits apply. */
-async function post(path: string, body: object): Promise<Response> {
+async function post(path: string, body: object, headers: Record<string, string> = {}): Promise<Response> {
   return fetch(`/api/auth${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
 }
 
 function problem(response: Response, otherwise: string): string {
   return response.status === 429 ? "Too many tries. Wait a minute, then try again." : otherwise;
+}
+
+/** What to say when a link wasn't sent. The server words its own limits, since only it knows which one. */
+async function linkProblem(response: Response): Promise<string> {
+  const body: { code?: string; message?: string } = await response.json().catch(() => ({}));
+  if (body.message && (body.code === LINK_LIMIT_CODE || body.code === DAILY_CAP_CODE)) return body.message;
+  if (response.status === 400 || response.status === 403) return "The bot check didn't pass. Try again.";
+  return problem(response, "The email didn't send. Check the address and try again.");
 }
 
 function Alert({ children }: { children: string | null }) {
@@ -27,11 +37,20 @@ function Alert({ children }: { children: string | null }) {
   );
 }
 
-/** Asks for an email and sends a sign-in link to it. New addresses get an account. */
-export function EmailForm({ next }: { next: string }) {
+/**
+ * Asks for an email and sends a sign-in link to it. New addresses get an account. `siteKey` is
+ * Cloudflare's bot check, null only under `next dev` without one.
+ */
+export function EmailForm({ next, siteKey }: { next: string; siteKey: string | null }) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [tokensUsed, setTokensUsed] = useState(0);
+  const checkFailed = useCallback(
+    () => setError("The bot check couldn't run. Turn off any content blocker for this site, then reload the page."),
+    [],
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,13 +58,20 @@ export function EmailForm({ next }: { next: string }) {
     setPending(true);
     setError(null);
     try {
-      const response = await post("/sign-in/magic-link", { email, callbackURL: next });
+      const response = await post(
+        "/sign-in/magic-link",
+        { email, callbackURL: next },
+        token ? { "x-captcha-response": token } : {},
+      );
       if (response.ok) setSentTo(email);
-      else setError(problem(response, "The email didn't send. Check the address and try again."));
+      else setError(await linkProblem(response));
     } catch {
       setError("Couldn't reach the app. Check your connection.");
     } finally {
       setPending(false);
+      // Used now, whatever the answer was, so the next try needs a new one.
+      setToken(null);
+      setTokensUsed((used) => used + 1);
     }
   }
 
@@ -69,8 +95,9 @@ export function EmailForm({ next }: { next: string }) {
         {/* 16px text, so iPhone doesn't zoom in on the field. */}
         <input type="email" name="email" required autoFocus autoComplete="email" className={FIELD} />
       </label>
+      {siteKey && <Turnstile key={tokensUsed} siteKey={siteKey} onToken={setToken} onFailed={checkFailed} />}
       <Alert>{error}</Alert>
-      <button type="submit" disabled={pending} className={BUTTON}>
+      <button type="submit" disabled={pending || (siteKey !== null && !token)} className={BUTTON}>
         {pending ? "Sending…" : "Email me a sign-in link"}
       </button>
     </form>

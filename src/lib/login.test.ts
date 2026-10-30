@@ -8,7 +8,29 @@ import {
   safeEqual,
   safeNext,
   trustedOrigins,
+  turnstileProblem,
+  usesTurnstile,
 } from "./login";
+
+describe("Turnstile settings", () => {
+  const both = { TURNSTILE_SITE_KEY: "site", TURNSTILE_SECRET_KEY: "secret" };
+
+  it("is required on a deployment, even with no keys", () => {
+    expect(usesTurnstile({ NODE_ENV: "production" })).toBe(true);
+    expect(usesTurnstile({})).toBe(true);
+    expect(turnstileProblem({ NODE_ENV: "production" })).toMatch(/TURNSTILE/);
+    expect(turnstileProblem({ NODE_ENV: "production", TURNSTILE_SITE_KEY: "site" })).toMatch(/TURNSTILE/);
+    expect(turnstileProblem({ NODE_ENV: "production", TURNSTILE_SECRET_KEY: "secret" })).toMatch(/TURNSTILE/);
+    expect(turnstileProblem({ NODE_ENV: "production", ...both })).toBeNull();
+  });
+
+  it("can be left out under next dev, but not half set up", () => {
+    expect(usesTurnstile({ NODE_ENV: "development" })).toBe(false);
+    expect(turnstileProblem({ NODE_ENV: "development" })).toBeNull();
+    expect(usesTurnstile({ NODE_ENV: "development", ...both })).toBe(true);
+    expect(turnstileProblem({ NODE_ENV: "development", TURNSTILE_SECRET_KEY: "secret" })).toMatch(/TURNSTILE/);
+  });
+});
 
 describe("checkOwnerPassword", () => {
   const env = { DASHBOARD_PASSWORD: "correct horse" };

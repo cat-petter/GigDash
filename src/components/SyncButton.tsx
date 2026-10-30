@@ -25,6 +25,7 @@ export function SyncButton({ lastSyncedAt, running, error, now }: Props) {
   const [, startRefresh] = useTransition();
   const [clock, setClock] = useState(() => new Date(now));
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [tooSoon, setTooSoon] = useState(false);
   const polls = useRef(0);
 
   useEffect(() => {
@@ -49,13 +50,15 @@ export function SyncButton({ lastSyncedAt, running, error, now }: Props) {
   async function syncNow() {
     setPosting(true);
     setRequestError(null);
+    setTooSoon(false);
     try {
       const response = await fetch("/api/sync", { method: "POST" });
       if (response.status === 401) {
         router.push("/login");
         return;
       }
-      if (!response.ok) setRequestError(`The sync request failed (${response.status})`);
+      if (response.status === 429) setTooSoon(true);
+      else if (!response.ok) setRequestError(`The sync request failed (${response.status})`);
     } catch {
       setRequestError("Couldn't reach the app. Check your connection.");
     } finally {
@@ -85,6 +88,7 @@ export function SyncButton({ lastSyncedAt, running, error, now }: Props) {
             ? `Synced ${timeAgo(new Date(lastSyncedAt), clock)}`
             : "Not synced yet"}
       </p>
+      {tooSoon && !busy && <p className="max-w-64 text-xs text-warn">A sync just ran. Try again in a minute.</p>}
       {shownError && (
         <p className="max-w-64 text-xs text-bad">
           Last sync failed: {shownError.split("\n")[0]}{" "}

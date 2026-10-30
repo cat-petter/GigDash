@@ -1,9 +1,12 @@
 "use server";
 
+import { isAPIError } from "better-auth/api";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { requireUser } from "@/lib/dal";
+import { DAILY_CAP_CODE } from "@/lib/limit-codes";
+import { DAILY_CAP_MESSAGE } from "@/lib/limits";
 import { looksLikeEmail } from "@/lib/login";
 import { OWNER_PLACEHOLDER_EMAIL } from "@/lib/owner";
 
@@ -32,6 +35,7 @@ export async function addEmail(_state: AddEmailState, form: FormData): Promise<A
     await auth.api.changeEmail({ body: { newEmail: email }, headers: await headers() });
   } catch (error) {
     console.error(error);
+    if (isAPIError(error) && error.body?.code === DAILY_CAP_CODE) return { error: DAILY_CAP_MESSAGE, sentTo: null };
     return { error: "The email didn't send. Try again in a minute.", sentTo: null };
   }
   return { error: null, sentTo: email };

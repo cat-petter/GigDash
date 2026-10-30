@@ -6,10 +6,12 @@ import type { SyncRun } from "@/generated/prisma/client";
 import { Card } from "@/components/Card";
 import { SyncButton } from "@/components/SyncButton";
 import { calendarNames, listCalendarNames } from "@/lib/caldav";
+import { emailsSentToday } from "@/lib/counters";
 import { requireUser, usesEnvCalendar } from "@/lib/dal";
 import { appTimeZone, trackFrom } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
+import { DAILY_EMAIL_CAP } from "@/lib/limits";
 import { isPending, syncStatus } from "@/lib/run-sync";
 
 export const metadata: Metadata = { title: "Status · Gigs" };
@@ -168,6 +170,7 @@ export default async function StatusPage() {
   ]);
   const lastGood = runs.find((run) => run.ok);
   const names = calendarNames();
+  const emailsToday = user.isOwner ? await emailsSentToday(now) : null;
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-6">
@@ -230,6 +233,25 @@ export default async function StatusPage() {
           />
         </div>
       </Card>
+
+      {emailsToday !== null && (
+        <Card title="Sign-in emails">
+          <Fact
+            label="Sent today"
+            value={`${emailsToday} of ${DAILY_EMAIL_CAP}`}
+            note={
+              emailsToday >= DAILY_EMAIL_CAP ? (
+                <span className="text-bad">
+                  Today&apos;s cap is reached, so nobody can get a sign-in link until midnight UTC. Everyone already signed
+                  in stays signed in.
+                </span>
+              ) : (
+                "The cap keeps sign-ins under Resend's limit of 100 a day. It starts over at midnight UTC."
+              )
+            }
+          />
+        </Card>
+      )}
 
       <Card title="Last 10 syncs" note="Syncs run once a day, when you open the dashboard, and when you tap Sync now.">
         {runs.length === 0 ? (

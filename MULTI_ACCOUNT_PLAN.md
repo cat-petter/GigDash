@@ -125,12 +125,16 @@ Test it on a copy of the production database (a Neon branch) before merging: row
 - Vercel preview (2026-10-30): `RESEND_API_KEY` and `EMAIL_FROM` = `Gigs <onboarding@resend.dev>` are set for Preview, branch `multi-account` only. That test sender only delivers to the Resend account's own email; a verified domain is needed before anyone else can sign in (cutover step 1). DuckDNS can't be used: it has no MX records and only one TXT value. Sign-in by link was tested on the preview and works.
 - Verified locally: sign-up by link, a new account sees none of the owner's data and can't sync (409), a used link is refused, log out deletes the session, the owner's password works then stops once his email is confirmed, the owner signs in by link, disabled endpoints return 404, tokens are stored hashed with a 900-second expiry.
 
-### 3. Abuse protection
+### 3. Abuse protection — done
 
-- Turnstile check on the server for every "send me a link" request (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`).
-- Per-email and per-IP limits on sending links, on top of Better Auth's defaults.
-- A daily cap on links sent (for example, 80), kept below Resend's 100. When it's reached, sign-in says to try again tomorrow, and the owner's page shows it.
-- A limit on manual syncs per user (for example, once a minute), so nobody can use the app to hammer iCloud.
+- Turnstile on the server for every "send me a link" request, with Better Auth's captcha plugin (`TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`). The widget is `src/app/login/turnstile.tsx`, hidden unless it needs a tap. A deployment missing either key refuses to send links and says so on the login page; the owner's password still works. `next dev` skips the check if neither is set. Any Content Security Policy added later must allow `challenges.cloudflare.com`.
+- A request goes through, in order: Better Auth's limit (5 a minute per IP), Turnstile, 10 links an hour per IP, 3 links per 15 minutes per mailbox, 80 emails a UTC day. A later step never spends an earlier one's budget in reverse: a request with no valid token counts for nothing, so a script can't lock someone out by sending their email, and a blocked IP doesn't use up a mailbox's limit.
+- `src/lib/limits.ts` has the numbers and rules; `src/lib/counters.ts` keeps the counts in the new `LimitCounter` table (migration `5_limits`), with one atomic statement per count. Addresses and IPs are hashed in the counter names. The daily cron removes ended counters.
+- A mailbox ignores case and `+tags`, so `a+1@x.com` and `A+2@x.com` share a limit.
+- The cap counts every email sent, including the owner's email confirmation, and an email that Resend then refuses. When it's reached, sign-in says to try again tomorrow, and `/status` shows the owner "80 of 80".
+- Sync now: once a minute per user (429 with `Retry-After`, and the button says so). Syncing on open and the cron aren't counted.
+- Verified locally against the dev server and the throwaway Postgres, with Cloudflare's published test keys: no token and a rejected token both refused with no counters spent; mailbox limit, including `+tag` and case spellings; IP limit; 8 parallel requests sending exactly 3 links; the cap at 79 → 80 → refused, shown on `/status`; a window ending starts over; Sync now 200 → 429 → 200; a production server with no keys refusing links.
+- Still to check on the preview, since local requests don't come through Vercel: Better Auth only trusts `x-forwarded-for` when it holds one address. If Vercel ever sent several, everyone would share one IP bucket.
 
 ### 4. Scope every query to the logged-in user
 

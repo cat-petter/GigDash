@@ -86,6 +86,17 @@ model RateLimit {
   lastRequest BigInt
 }
 
+/// Counts for our own limits (see limits.ts): sign-in links, emails per day, manual syncs.
+model LimitCounter {
+  /// Which limit, plus a hash of the address or IP it's about, so those aren't kept here.
+  key     String   @id
+  count   Int
+  /// When the count starts over.
+  resetAt DateTime
+
+  @@index([resetAt])
+}
+
 /// Where a user's gigs come from: their iCloud login and the names of their calendars.
 model CalendarAccount {
   userId            String   @id

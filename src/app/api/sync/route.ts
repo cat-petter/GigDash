@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { SyncRun } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
+import { hitCounter, pruneCounters } from "@/lib/counters";
 import { usesEnvCalendar } from "@/lib/dal";
+import { manualSyncWait } from "@/lib/limits";
 import { safeEqual } from "@/lib/login";
 import { OWNER_ID } from "@/lib/owner";
 import { runSync, startSync } from "@/lib/run-sync";
@@ -21,6 +23,7 @@ export async function GET(request: NextRequest) {
   if (!secret || !safeEqual(header, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await pruneCounters().catch(console.error);
   // Only the owner has calendar settings until accounts can add their own.
   const run = await runSync(OWNER_ID);
   return NextResponse.json(summary(run), { status: run.ok ? 200 : 500 });
@@ -32,6 +35,10 @@ export async function POST(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!usesEnvCalendar(session.user)) {
     return NextResponse.json({ error: "Your iCloud calendar isn't connected yet" }, { status: 409 });
+  }
+  const wait = await manualSyncWait(session.user.id, hitCounter);
+  if (wait !== null) {
+    return NextResponse.json({ error: "A sync just ran" }, { status: 429, headers: { "Retry-After": String(wait) } });
   }
   const run = await startSync(session.user.id, 50_000);
   return NextResponse.json(run ? summary(run) : { pending: true });

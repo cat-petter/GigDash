@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/dal";
 import { db } from "@/lib/db";
-import { authProblem, safeNext } from "@/lib/login";
+import { authProblem, safeNext, turnstileProblem } from "@/lib/login";
 import { OWNER_ID, OWNER_PLACEHOLDER_EMAIL } from "@/lib/owner";
 import { EmailForm, OwnerPasswordForm } from "./forms";
 
@@ -21,6 +21,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const problem = authProblem();
   // Checked here, not in the proxy: a stale cookie there would bounce between this page and the dashboard.
   if (!problem && (await currentUser())) redirect(next);
+  const linkProblem = turnstileProblem();
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-4 py-10">
@@ -38,7 +39,14 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
               That sign-in link didn&apos;t work. It may have expired or been used already, so send a new one.
             </p>
           )}
-          <EmailForm next={next} />
+          {linkProblem ? (
+            <p className="rounded-xl border border-warn/40 px-3 py-2 text-sm text-warn">
+              Sign-in links aren&apos;t set up yet: {linkProblem}. Add them in Vercel under Settings → Environment
+              Variables, then redeploy.
+            </p>
+          ) : (
+            <EmailForm next={next} siteKey={process.env.TURNSTILE_SITE_KEY || null} />
+          )}
           {(await ownerUsesPassword()) && (
             <details className="text-sm">
               <summary className="cursor-pointer text-muted">Have the dashboard password?</summary>
