@@ -1,19 +1,15 @@
+import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
-import { isValidSession, safeNext, SESSION_COOKIE } from "@/lib/auth";
+import { COOKIE_PREFIX } from "@/lib/login";
 
-/** Every page needs a login, except the login page itself. */
+/**
+ * Every page needs a login, except the login pages. This only checks that there's a session cookie,
+ * so signed-out visitors go straight to /login; each page checks the session is real (src/lib/dal.ts).
+ */
 export function proxy(request: NextRequest) {
-  const { pathname, search, searchParams } = request.nextUrl;
-  const loggedIn = isValidSession(request.cookies.get(SESSION_COOKIE)?.value);
-
-  if (pathname === "/login") {
-    // Someone already logged in skips the form. Only for page loads: the form itself posts here.
-    if (loggedIn && request.method === "GET") {
-      return NextResponse.redirect(new URL(safeNext(searchParams.get("next")), request.url));
-    }
-    return NextResponse.next();
-  }
-  if (loggedIn) return NextResponse.next();
+  const { pathname, search } = request.nextUrl;
+  if (pathname === "/login" || pathname.startsWith("/login/")) return NextResponse.next();
+  if (getSessionCookie(request, { cookiePrefix: COOKIE_PREFIX })) return NextResponse.next();
 
   const login = new URL("/login", request.url);
   if (pathname !== "/" || search) login.searchParams.set("next", pathname + search);

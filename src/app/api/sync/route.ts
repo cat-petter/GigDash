@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { SyncRun } from "@/generated/prisma/client";
-import { isValidSession, safeEqual, SESSION_COOKIE } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { usesEnvCalendar } from "@/lib/dal";
+import { safeEqual } from "@/lib/login";
 import { OWNER_ID } from "@/lib/owner";
 import { runSync, startSync } from "@/lib/run-sync";
 
@@ -26,10 +28,11 @@ export async function GET(request: NextRequest) {
 
 /** The Sync now button. Returns { pending: true } if the sync is still going when this returns. */
 export async function POST(request: NextRequest) {
-  if (!isValidSession(request.cookies.get(SESSION_COOKIE)?.value)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!usesEnvCalendar(session.user)) {
+    return NextResponse.json({ error: "Your iCloud calendar isn't connected yet" }, { status: 409 });
   }
-  // The one password logs in as the owner.
-  const run = await startSync(OWNER_ID, 50_000);
+  const run = await startSync(session.user.id, 50_000);
   return NextResponse.json(run ? summary(run) : { pending: true });
 }

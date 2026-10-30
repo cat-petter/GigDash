@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { requireUser } from "@/lib/dal";
 import { type MatchRules, type NameKind, parseWordList } from "@/lib/names";
 import {
   mergeNames,
@@ -12,7 +13,6 @@ import {
   resetRules,
   saveRules,
 } from "@/lib/names-store";
-import { requireLogin } from "@/lib/session";
 
 export type NameResult = { error: string | null };
 
@@ -21,7 +21,7 @@ async function run(
   kind: unknown,
   change: (userId: string, kind: NameKind) => Promise<void>,
 ): Promise<NameResult> {
-  const userId = await requireLogin("/");
+  const userId = (await requireUser("/")).id;
   if (!NAME_KINDS.includes(kind as NameKind)) return { error: "Unknown kind." };
   try {
     await change(userId, kind as NameKind);

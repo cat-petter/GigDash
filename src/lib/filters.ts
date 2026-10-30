@@ -11,7 +11,7 @@ export type WhenKey = "upcoming" | "past" | "all";
 export type ShowKey = "gigs" | Status;
 export type SortKey = "date" | "date-desc" | "lead" | "lead-desc" | "price-desc" | "price";
 /** Settings tab: which list to manage. */
-export type SectionKey = "people" | "places" | "rules";
+export type SectionKey = "people" | "places" | "rules" | "account";
 /** Stats tab: the card that's open, if any. */
 export type CardKey = "location" | "musician" | "busiest";
 /** The busiest card: a month, half a year or a year at a time, or dates he picks. */
@@ -60,6 +60,7 @@ export const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "people", label: "Musicians" },
   { key: "places", label: "Places" },
   { key: "rules", label: "Rules" },
+  { key: "account", label: "Account" },
 ];
 
 export const CARDS: { key: CardKey }[] = [{ key: "location" }, { key: "musician" }, { key: "busiest" }];

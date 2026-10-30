@@ -1,74 +1,91 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { nextCookies } from "better-auth/next-js";
+import { magicLink } from "better-auth/plugins/magic-link";
+import { db } from "./db";
+import { linkEmail, sendEmail } from "./email";
+import { authBaseURL, authSecret, COOKIE_PREFIX, LINK_LIFETIME, trustedOrigins } from "./login";
+import { ownerPassword } from "./owner-login";
 
-export const SESSION_COOKIE = "gigdash_session";
-/** How long a login lasts, in seconds. */
-export const SESSION_MAX_AGE = 180 * 24 * 60 * 60;
-
-type Env = Record<string, string | undefined>;
-type Secrets = { password: string; secret: string };
-
-function secrets(env: Env = process.env): Secrets | null {
-  const password = env.DASHBOARD_PASSWORD;
-  const secret = env.CRON_SECRET;
-  return password && secret ? { password, secret } : null;
+/** The page an emailed link opens: a button, so a mail scanner opening the link doesn't use it up. */
+function confirmURL(betterAuthURL: string, token: string, type: "sign-in" | "email"): string {
+  const link = new URL(betterAuthURL);
+  const confirm = new URL("/login/confirm", link.origin);
+  confirm.searchParams.set("token", token);
+  if (type === "email") confirm.searchParams.set("type", "email");
+  const next = link.searchParams.get("callbackURL");
+  if (type === "sign-in" && next && next !== "/") confirm.searchParams.set("next", next);
+  return confirm.toString();
 }
 
-/** Why logging in can't work yet, or null if it can. */
-export function authProblem(env: Env = process.env): string | null {
-  if (!env.DASHBOARD_PASSWORD) return "DASHBOARD_PASSWORD isn't set";
-  if (!env.CRON_SECRET) return "CRON_SECRET isn't set";
-  return null;
-}
+const DAY = 24 * 60 * 60;
 
-function hmac(key: string | Buffer, data: string): Buffer {
-  return createHmac("sha256", key).update(data).digest();
-}
+export const auth = betterAuth({
+  appName: "Gigs",
+  baseURL: authBaseURL(),
+  secret: authSecret(),
+  trustedOrigins: trustedOrigins(),
+  database: prismaAdapter(db, { provider: "postgresql" }),
+  telemetry: { enabled: false },
+  advanced: { cookiePrefix: COOKIE_PREFIX },
+  session: { expiresIn: 90 * DAY, updateAge: DAY },
+  rateLimit: { enabled: true, storage: "database" },
+  user: {
+    additionalFields: { isOwner: { type: "boolean", required: false, defaultValue: false, input: false } },
+    // Only used by the owner adding his first real email (see Settings → Account).
+    changeEmail: { enabled: true },
+  },
+  emailVerification: {
+    expiresIn: LINK_LIFETIME,
+    sendVerificationEmail: async ({ user, url, token }) => {
+      await sendEmail(
+        linkEmail(
+          user.email,
+          "Confirm your email for Gigs",
+          ["Tap the button to confirm this is your email. After that, you'll sign in with a link sent here."],
+          "Confirm email",
+          confirmURL(url, token, "email"),
+        ),
+      );
+    },
+  },
+  // Endpoints this app doesn't use. Server code can still call them through auth.api.
+  disabledPaths: [
+    "/sign-up/email",
+    "/sign-in/email",
+    "/sign-in/social",
+    "/update-user",
+    "/change-email",
+    "/change-password",
+    "/set-password",
+    "/delete-user",
+    "/send-verification-email",
+    "/request-password-reset",
+    "/reset-password",
+    "/link-social",
+    "/unlink-account",
+    "/list-accounts",
+  ],
+  plugins: [
+    magicLink({
+      expiresIn: LINK_LIFETIME,
+      storeToken: "hashed",
+      sendMagicLink: async ({ email, url, token }) => {
+        await sendEmail(
+          linkEmail(
+            email,
+            "Sign in to Gigs",
+            ["Tap the button to sign in to Gigs. The link works once, for 15 minutes."],
+            "Sign in",
+            confirmURL(url, token, "sign-in"),
+          ),
+        );
+      },
+    }),
+    ownerPassword(),
+    // Last, so cookies set by auth.api calls in server actions reach the browser.
+    nextCookies(),
+  ],
+});
 
-/** Compares two strings without leaking, through timing, how much of them matched. */
-export function safeEqual(a: string, b: string): boolean {
-  // Hashing first makes the lengths equal, which timingSafeEqual needs.
-  return timingSafeEqual(hmac("compare", a), hmac("compare", b));
-}
-
-// Changing either the password or CRON_SECRET signs everyone out.
-function signingKey({ password, secret }: Secrets): Buffer {
-  return hmac(secret, `session key\n${password}`);
-}
-
-function signature(keys: Secrets, expires: number): string {
-  return hmac(signingKey(keys), `session\n${expires}`).toString("base64url");
-}
-
-export function checkPassword(attempt: string, env: Env = process.env): boolean {
-  const keys = secrets(env);
-  return keys !== null && safeEqual(attempt, keys.password);
-}
-
-/** A cookie value that proves a login, good for SESSION_MAX_AGE. */
-export function createSession(now = Date.now(), env: Env = process.env): string {
-  const keys = secrets(env);
-  if (!keys) throw new Error(authProblem(env) ?? "Login isn't set up");
-  const expires = now + SESSION_MAX_AGE * 1000;
-  return `${expires}.${signature(keys, expires)}`;
-}
-
-export function isValidSession(
-  value: string | undefined,
-  now = Date.now(),
-  env: Env = process.env,
-): boolean {
-  const keys = secrets(env);
-  if (!keys || !value) return false;
-  const match = /^(\d{1,15})\.([\w-]+)$/.exec(value);
-  if (!match) return false;
-  const expires = Number(match[1]);
-  return expires > now && safeEqual(match[2], signature(keys, expires));
-}
-
-/** Where to go after logging in. Only paths on this site, so a link can't bounce him elsewhere. */
-export function safeNext(next: unknown): string {
-  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
-    return "/";
-  }
-  return next;
-}
+export type SessionUser = typeof auth.$Infer.Session.user;

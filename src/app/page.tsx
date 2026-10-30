@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { AddEmailCard, LogOutButton } from "@/components/AccountSettings";
 import { Card } from "@/components/Card";
 import { GigsView } from "@/components/GigsView";
 import { OverviewView } from "@/components/OverviewView";
@@ -9,13 +10,14 @@ import { StatsView } from "@/components/StatsView";
 import { SyncButton } from "@/components/SyncButton";
 import { TabBar } from "@/components/TabBar";
 import { calendarNames, icloudConfigured } from "@/lib/caldav";
+import { requireUser, usesEnvCalendar } from "@/lib/dal";
 import { appTimeZone, dayInZone } from "@/lib/dates";
 import { type Filters, parseFilters, TABS } from "@/lib/filters";
 import { greeting } from "@/lib/format";
 import { loadGigs } from "@/lib/gigs";
 import type { Names } from "@/lib/names";
+import { OWNER_PLACEHOLDER_EMAIL } from "@/lib/owner";
 import { autoSync, syncStatus } from "@/lib/run-sync";
-import { requireLogin } from "@/lib/session";
 import { filterOptions, gigList, needsAttention } from "@/lib/stats";
 
 /** An old link may name one spelling ("kaler"); it now means whoever that spelling belongs to. */
@@ -29,7 +31,8 @@ function Notice({ children }: { children: React.ReactNode }) {
 }
 
 export default async function Dashboard({ searchParams }: PageProps<"/">) {
-  const userId = await requireLogin("/");
+  const user = await requireUser("/");
+  const userId = user.id;
   await connection();
   const asked = parseFilters(await searchParams);
 
@@ -41,7 +44,8 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     zoneProblem = true;
   }
 
-  const connected = icloudConfigured();
+  const ownCalendar = usesEnvCalendar(user);
+  const connected = ownCalendar && icloudConfigured();
   if (connected) await autoSync(userId, 2000);
 
   const now = new Date();
@@ -67,12 +71,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
           Status
         </Link>
       </div>
-      <SyncButton {...sync} />
+      {ownCalendar && <SyncButton {...sync} />}
     </header>
   );
 
   const notices = (
     <>
+      {user.email === OWNER_PLACEHOLDER_EMAIL && <AddEmailCard />}
       {!connected && (
         <Notice>
           iCloud isn&apos;t connected yet, so this only shows gigs that are already saved.{" "}
@@ -98,14 +103,24 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
         {header}
         {notices}
         <Card title="No gigs yet">
-          <p className="text-sm text-muted">
-            Once the app reads your calendars, your gigs show up here. Tap Sync now, or open{" "}
-            <Link href="/status" className="text-accent">
-              Status
-            </Link>{" "}
-            if nothing arrives.
-          </p>
+          {ownCalendar ? (
+            <p className="text-sm text-muted">
+              Once the app reads your calendars, your gigs show up here. Tap Sync now, or open{" "}
+              <Link href="/status" className="text-accent">
+                Status
+              </Link>{" "}
+              if nothing arrives.
+            </p>
+          ) : (
+            <p className="text-sm text-muted">
+              Your gigs show up here once your iCloud calendar is connected. That&apos;s coming soon.
+            </p>
+          )}
         </Card>
+        <div className="flex items-center justify-between gap-3 px-1 text-sm text-muted">
+          <span className="min-w-0 truncate">Signed in as {user.email}</span>
+          <LogOutButton />
+        </div>
       </main>
     );
   }
@@ -119,7 +134,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
       <PendingProvider>
         <PendingFrame>
           {filters.tab === "settings" ? (
-            <SettingsView filters={filters} people={people} places={places} rules={rules} />
+            <SettingsView filters={filters} people={people} places={places} rules={rules} user={user} />
           ) : filters.tab === "gigs" ? (
             <GigsView
               gigs={gigList(rows, filters, today)}
@@ -132,7 +147,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
           ) : filters.tab === "stats" ? (
             <StatsView rows={rows} filters={filters} today={today} people={options.people} places={options.locations} />
           ) : (
-            <OverviewView rows={rows} today={today} attention={needsAttention(rows)} calendars={calendarNames()} />
+            <OverviewView rows={rows} today={today} attention={needsAttention(rows)} calendars={calendarNames(ownCalendar ? process.env : {})} />
           )}
         </PendingFrame>
         <TabBar filters={filters} />

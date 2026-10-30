@@ -6,11 +6,11 @@ import type { SyncRun } from "@/generated/prisma/client";
 import { Card } from "@/components/Card";
 import { SyncButton } from "@/components/SyncButton";
 import { calendarNames, listCalendarNames } from "@/lib/caldav";
+import { requireUser, usesEnvCalendar } from "@/lib/dal";
 import { appTimeZone, trackFrom } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
 import { isPending, syncStatus } from "@/lib/run-sync";
-import { requireLogin } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Status · Gigs" };
 
@@ -133,7 +133,9 @@ function Fact({ label, value, note }: { label: string; value: React.ReactNode; n
 }
 
 export default async function StatusPage() {
-  const userId = await requireLogin("/status");
+  const user = await requireUser("/status");
+  const userId = user.id;
+  const ownCalendar = usesEnvCalendar(user);
   await connection();
   const now = new Date();
 
@@ -176,17 +178,23 @@ export default async function StatusPage() {
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">Status</h1>
         </div>
-        <SyncButton {...sync} />
+        {ownCalendar && <SyncButton {...sync} />}
       </header>
 
-      <Card
-        title="Calendars"
-        note={`This app reads only "${names.gigs}"${names.holds ? `, "${names.holds}"` : ""} and "${names.wanted}" if it exists. It never changes anything in your calendar.`}
-      >
-        <Suspense fallback={<p className="text-sm text-muted">Checking iCloud…</p>}>
-          <Calendars />
-        </Suspense>
-      </Card>
+      {ownCalendar ? (
+        <Card
+          title="Calendars"
+          note={`This app reads only "${names.gigs}"${names.holds ? `, "${names.holds}"` : ""} and "${names.wanted}" if it exists. It never changes anything in your calendar.`}
+        >
+          <Suspense fallback={<p className="text-sm text-muted">Checking iCloud…</p>}>
+            <Calendars />
+          </Suspense>
+        </Card>
+      ) : (
+        <Card title="Calendars">
+          <p className="text-sm text-muted">Connecting your own iCloud calendar is coming soon.</p>
+        </Card>
+      )}
 
       <Card title="Gigs saved">
         <div className="divide-y divide-line">

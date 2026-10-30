@@ -42,7 +42,7 @@ Nothing is bulletproof. The aim is several layers, so no single mistake exposes 
 - Rate limits: per IP address and per email address for sending links (for example, 3 per email per 15 minutes and 10 per IP per hour), plus Better Auth's own limits on verifying. They're stored in Postgres so they hold across Vercel's instances.
 - Cloudflare Turnstile on the sign-in form, so bots can't spend the email quota.
 - Sessions are rows in the database, sent as an `httpOnly`, `Secure`, `SameSite=Lax` cookie, lasting 90 days. Log out removes the row. Settings shows the signed-in devices, with "log out everywhere".
-- An email goes out when a new device signs in.
+- No "new device" email: every sign-in is already a link sent to the person's inbox, so it would only double the email.
 
 **Keeping users' data apart**
 - Every database read and write goes through one place (`src/lib/dal.ts`) that gets the user from the session. The user id never comes from the request body or URL.
@@ -109,16 +109,20 @@ The migration (`4_accounts`), written by hand so it's safe on the live data:
 
 Test it on a copy of the production database (a Neon branch) before merging: row counts match, and the dashboard shows the same numbers.
 
-### 2. Logins
+### 2. Logins — done
 
-- `src/lib/auth.ts` becomes the Better Auth setup: Prisma adapter, magic-link plugin (15-minute expiry, Resend to send), database sessions (90 days), rate limits stored in Postgres, `trustedOrigins` set to the production domain.
+- `src/lib/auth.ts` is the Better Auth setup: Prisma adapter, magic-link plugin (15-minute links, only a hash stored), database sessions (90 days, cookie `gigdash.session_token`), rate limits stored in Postgres, `trustedOrigins` from the Vercel addresses. Endpoints the app doesn't use are turned off (`disabledPaths`).
 - `src/app/api/auth/[...all]/route.ts` mounts Better Auth's handler.
-- New `src/lib/dal.ts` (Next's "Data Access Layer" pattern, `node_modules/next/dist/docs/01-app/02-guides/authentication.md`): `currentUser = cache(async () => …)` loads the session and user, and redirects to `/login` if there isn't one. `requireLogin` in `session.ts` becomes a wrapper around it.
-- `src/proxy.ts` only checks that a session cookie is there and sends everyone else to `/login`. The real check happens in the DAL, close to the data, as Next's guide recommends.
-- `/login`: one email field, with Turnstile. Then "Check your email".
-- `/login/confirm`: the "Sign in" button page the email links to.
-- New `src/lib/email.ts`: sends with Resend's API (`RESEND_API_KEY`, `EMAIL_FROM`). A plain sign-in email and a new-device email.
-- **Transition rule for the owner:** while the owner still has the placeholder email, the login page also accepts `DASHBOARD_PASSWORD` and signs in as the owner. The dashboard then asks him for his email and sends a magic link to confirm it. Once confirmed, `DASHBOARD_PASSWORD` stops working.
+- `src/lib/dal.ts`: `currentUser` (cached per request) and `requireUser`, which replace `session.ts`. `usesEnvCalendar(user)` keeps the iCloud env vars to the owner: anyone else would sync the owner's calendar into their own account. Other users see "coming soon" until phase 5.
+- `src/proxy.ts` only checks that a session cookie is there. The login pages are always shown; `/login` itself sends signed-in visitors on (doing that in the proxy would loop on a stale cookie).
+- `/login`: one email field (Turnstile comes in phase 3). The forms post to `/api/auth/…` from the browser, so Better Auth's rate limits apply; they don't apply to `auth.api` calls from server code.
+- `/login/confirm`: the button page links land on, for sign-in links and the email confirmation.
+- `src/lib/email.ts` sends with Resend (`RESEND_API_KEY`, `EMAIL_FROM`). Under `next dev` without a key it prints the email to the terminal.
+- New pure helpers in `src/lib/login.ts` (`safeEqual`, `safeNext`, base URL and secret), tested without the database.
+- **Owner transition:** while the owner has the placeholder email, the login page also offers `DASHBOARD_PASSWORD` (a small Better Auth plugin, `src/lib/owner-login.ts`, 5 tries a minute, 1 s delay when wrong). The dashboard shows "Add your email" until he does; confirming it uses Better Auth's change-email flow, and the password stops working.
+- Settings → Account shows the email and Log out. The rest of that section is phase 7.
+- New env vars: `BETTER_AUTH_SECRET` (falls back to a key made from `CRON_SECRET`), `BETTER_AUTH_URL` (optional; set to `http://localhost:3100` locally), `RESEND_API_KEY`, `EMAIL_FROM`. Without the Resend ones, deployed sign-in emails fail with a message; the owner's password still works.
+- Verified locally: sign-up by link, a new account sees none of the owner's data and can't sync (409), a used link is refused, log out deletes the session, the owner's password works then stops once his email is confirmed, the owner signs in by link, disabled endpoints return 404, tokens are stored hashed with a 900-second expiry.
 
 ### 3. Abuse protection
 
