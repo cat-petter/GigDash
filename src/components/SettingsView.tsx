@@ -33,16 +33,16 @@ export function SettingsView({
         current={filters.section}
         hrefOf={(section) => withFilter(filters, { section })}
       />
-      {filters.section === "people" && <NamesManager kind="person" groups={people.groups} filters={filters} />}
-      {filters.section === "places" && <NamesManager kind="place" groups={places.groups} filters={filters} />}
+      {filters.section === "people" && <NamesManager kind="person" groups={people.groups} />}
+      {filters.section === "places" && <NamesManager kind="place" groups={places.groups} />}
       {filters.section === "rules" && (
         <>
           <p className="px-1 text-sm text-muted">
-            Names are often written a few ways. These rules decide which spellings are the same person or place, and
-            the one written most is how it shows. Anything you set by hand under People or Places stays as you set
-            it. Changes show everywhere right away; the calendar isn&apos;t changed.
+            Names are often written a few ways. These rules decide which spellings are the same musician or place,
+            and the one written most is how it shows. Anything you set by hand under Musicians or Places stays as you
+            set it. Changes show everywhere right away; the calendar isn&apos;t changed.
           </p>
-          <Card title="People" note={summary(people, "person", "people")}>
+          <Card title="Musicians" note={summary(people, "musician", "musicians")}>
             <RulesForm kind="person" rules={rules.person} />
           </Card>
           <Card title="Places" note={summary(places, "place", "places")}>

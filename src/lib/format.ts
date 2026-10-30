@@ -39,3 +39,10 @@ export function formatDay(day: Day): string {
     dayToDate(day),
   );
 }
+
+/** "Good afternoon, Yechiel!" by the hour in the given zone: morning from 5, afternoon from 12, evening from 5 PM. */
+export function greeting(now: Date, timeZone: string, name?: string): string {
+  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" }).format(now));
+  const part = hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 17 ? "afternoon" : "evening";
+  return name ? `Good ${part}, ${name}!` : `Good ${part}!`;
+}

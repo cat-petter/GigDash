@@ -4,13 +4,16 @@ import {
   DEFAULT_FILTERS,
   type Filters,
   dateBounds,
-  extraFilterCount,
   inScope,
   isFiltered,
   leadBucket,
   monthEnd,
   NONE_KEY,
   parseFilters,
+  periodBounds,
+  periodLabel,
+  periodOf,
+  rangeLabel,
   toQuery,
   withFilter,
 } from "./filters";
@@ -78,6 +81,9 @@ describe("parseFilters", () => {
       show: "hold",
       sort: "lead-desc",
       section: "people",
+      card: null,
+      per: "month",
+      period: null,
     });
   });
 
@@ -148,13 +154,40 @@ describe("toQuery and withFilter", () => {
     expect(withFilter(DEFAULT_FILTERS, { tab: "settings", section: "rules" })).toBe("/?tab=settings&section=rules");
   });
 
-  it("clears the shared filters but stays on the tab", () => {
-    expect(clearedFilters(filters({ tab: "gigs", person: "kaller", when: "past" }))).toEqual(filters({ tab: "gigs" }));
+  it("clears the dates, person and place but keeps the tab's own choices", () => {
+    expect(clearedFilters(filters({ tab: "gigs", person: "kaller", range: "year", when: "past" }))).toEqual(
+      filters({ tab: "gigs", when: "past" }),
+    );
   });
 
-  it("counts the filters besides the dates", () => {
-    expect(extraFilterCount(filters({ range: "year" }))).toBe(0);
-    expect(extraFilterCount(filters({ person: "kaller", location: "x", lead: "3m" }))).toBe(3);
+  it("reads the Stats tab's card and period, dropping bad periods", () => {
+    const card = filters({ tab: "stats", card: "busiest", per: "half", period: "2026-H2" });
+    expect(toQuery(card)).toBe("tab=stats&card=busiest&per=half&period=2026-H2");
+    expect(parseFilters(Object.fromEntries(new URLSearchParams(toQuery(card))))).toEqual(card);
+    expect(parseFilters({ card: "nope", per: "week", period: "2026-13" })).toEqual(DEFAULT_FILTERS);
+  });
+});
+
+describe("periods", () => {
+  it("knows the month, half year and year a day is in, and their first and last days", () => {
+    expect(periodOf("2026-07-04", "month")).toBe("2026-07");
+    expect(periodOf("2026-07-04", "half")).toBe("2026-H2");
+    expect(periodOf("2026-06-30", "half")).toBe("2026-H1");
+    expect(periodOf("2026-07-04", "year")).toBe("2026");
+    expect(periodBounds("2026-02")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    expect(periodBounds("2026-H2")).toEqual({ from: "2026-07-01", to: "2026-12-31" });
+    expect(periodBounds("2026")).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+    expect(["2026-11", "2026-H1", "2026"].map(periodLabel)).toEqual(["November 2026", "Jan–Jun 2026", "2026"]);
+  });
+
+  it("names a range, spotting custom dates that are a whole month or year", () => {
+    expect(rangeLabel(filters({ range: "6m" }))).toBe("Last 6 months");
+    expect(rangeLabel(filters({ range: "custom", from: "2026-03-01", to: "2026-03-31" }))).toBe("March 2026");
+    expect(rangeLabel(filters({ range: "custom", from: "2026-01-01", to: "2026-12-31" }))).toBe("2026");
+    expect(rangeLabel(filters({ range: "custom", from: "2026-03-02", to: "2026-03-31" }))).toBe(
+      "Mar 2, 2026 – Mar 31, 2026",
+    );
+    expect(rangeLabel(filters({ range: "custom", from: "2026-03-02" }))).toBe("From Mar 2, 2026");
   });
 });
 

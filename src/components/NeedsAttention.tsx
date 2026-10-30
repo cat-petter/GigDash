@@ -100,7 +100,7 @@ export function NeedsAttention({ attention, names }: { attention: Attention; nam
           </p>
           <Group
             title="Titles that couldn't be read"
-            help="A title needs a name, then “job” or “hold”, then an optional price and place, like “Kaller job 600 neemas hachaim”. These are left out of the per-person and per-place stats."
+            help="A title needs a name, then “job” or “hold”, then an optional price and place, like “Kaller job 600 neemas hachaim”. These are left out of the per-musician and per-place stats."
             gigs={unreadable}
           />
           <Group

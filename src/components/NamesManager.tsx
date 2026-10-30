@@ -2,14 +2,14 @@
 
 import { type FormEvent, type ReactNode, useState, useTransition } from "react";
 import { mergeAction, moveAction, type NameResult, renameAction, resetNameAction } from "@/app/names-actions";
-import { type Filters, withFilter } from "@/lib/filters";
+import { linkTo } from "@/lib/filters";
 import { plural } from "@/lib/format";
 import { displayText, type NameGroup, type NameKind, NEW_NAME } from "@/lib/names";
 import { FilterLink } from "./Pending";
 
 const WORDS: Record<NameKind, { one: string; many: string; gigs: string }> = {
-  person: { one: "person", many: "people", gigs: "See their gigs" },
-  place: { one: "place", many: "places", gigs: "See gigs there" },
+  person: { one: "musician", many: "musicians", gigs: "See their stats" },
+  place: { one: "place", many: "places", gigs: "See its stats" },
 };
 
 const chevron = (
@@ -66,8 +66,8 @@ function alsoWritten(group: NameGroup): string | null {
   return others.length > 0 ? `also written ${others.join(", ")}` : null;
 }
 
-/** Settings → People (or Places): each one with its spellings, to rename, split up or merge. */
-export function NamesManager({ kind, groups, filters }: { kind: NameKind; groups: NameGroup[]; filters: Filters }) {
+/** Settings → Musicians (or Places): each one with its spellings, to rename, split up or merge. */
+export function NamesManager({ kind, groups }: { kind: NameKind; groups: NameGroup[] }) {
   const words = WORDS[kind];
   const shown = groups.filter((group) => group.count > 0);
   const [query, setQuery] = useState("");
@@ -197,7 +197,11 @@ export function NamesManager({ kind, groups, filters }: { kind: NameKind; groups
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
           <FilterLink
-            href={withFilter(filters, kind === "person" ? { tab: "overview", person: group.id } : { tab: "overview", location: group.id })}
+            href={linkTo(
+              kind === "person"
+                ? { tab: "stats", card: "musician", person: group.id }
+                : { tab: "stats", card: "location", location: group.id },
+            )}
             className="text-accent"
           >
             {words.gigs}

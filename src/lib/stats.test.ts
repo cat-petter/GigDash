@@ -3,13 +3,18 @@ import { DEFAULT_FILTERS, type Filters, NONE_KEY } from "./filters";
 import {
   average,
   computeStats,
-  countsByPeriod,
   filterOptions,
   gigList,
   type GigRow,
+  jobsOverTime,
+  leaders,
   median,
   needsAttention,
-  personProfile,
+  nextJob,
+  profile,
+  rankPeople,
+  rankPeriods,
+  rankPlaces,
 } from "./stats";
 
 const TODAY = "2026-09-24";
@@ -150,22 +155,6 @@ describe("lead time", () => {
     expect(tiles).toMatchObject({ leadMedian: 30, leadAverage: 65.75, leadCounted: 4, leadMissing: 2 });
   });
 
-  it("counts only jobs per bucket", () => {
-    const histogram = stats([
-      gig({ leadDays: 0 }),
-      gig({ leadDays: 6 }),
-      hold({ leadDays: 7, gigDate: "2026-11-01" }),
-      gig({ leadDays: 95 }),
-      gig({ leadDays: null }),
-    ]).leadHistogram;
-    expect(histogram.map(({ key, jobs }) => [key, jobs])).toEqual([
-      ["lt1w", 2],
-      ["1to4w", 0],
-      ["1to3m", 0],
-      ["3m", 1],
-    ]);
-  });
-
   it("gives the shortest, longest, average and typical lead time of jobs", () => {
     const rows = [gig({ leadDays: 2 }), gig({ leadDays: 10 }), gig({ leadDays: 90 }), hold({ leadDays: 400, gigDate: "2026-11-01" })];
     expect(stats(rows).tiles).toMatchObject({ leadShortest: 2, leadLongest: 90, leadMedian: 10, leadAverage: 34 });
@@ -186,42 +175,77 @@ describe("date range", () => {
   });
 });
 
-describe("countsByPeriod", () => {
-  it("fills every month of the range, including empty ones", () => {
-    const periods = countsByPeriod([gig({ gigDate: "2026-03-15" }), hold({ gigDate: "2026-03-20" })], {
-      from: "2026-01-01",
-      to: "2026-12-31",
-    });
-    expect(periods).toHaveLength(12);
-    expect(periods[2]).toEqual({ key: "2026-03", label: "Mar", full: "March 2026", jobs: 1 });
-    expect(periods[0]).toMatchObject({ jobs: 0 });
+describe("jobsOverTime", () => {
+  it("counts jobs per month with no gaps, through this month", () => {
+    const bars = jobsOverTime([gig({ gigDate: "2026-06-15" }), hold({ gigDate: "2026-07-20" })], "month", TODAY);
+    expect(bars.map((bar) => [bar.key, bar.jobs])).toEqual([
+      ["2026-06", 1],
+      ["2026-07", 0],
+      ["2026-08", 0],
+      ["2026-09", 0],
+    ]);
+    expect(bars[0]).toMatchObject({ label: "Jun", full: "June 2026" });
   });
 
-  it("spans the data when the range is open, labelling months with their year across years", () => {
-    const periods = countsByPeriod([gig({ gigDate: "2025-11-02" }), gig({ gigDate: "2026-01-09" })], {
-      from: null,
-      to: null,
-    });
-    expect(periods.map((period) => period.label)).toEqual(["Nov ’25", "Dec ’25", "Jan ’26"]);
-  });
-
-  it("switches to years past 36 months", () => {
-    const periods = countsByPeriod([gig({ gigDate: "2021-05-01" }), gig({ gigDate: "2026-01-01" })], {
-      from: null,
-      to: null,
-    });
-    expect(periods.map((period) => [period.key, period.jobs])).toEqual([
-      ["2021", 1],
-      ["2022", 0],
-      ["2023", 0],
-      ["2024", 0],
-      ["2025", 0],
+  it("runs on to the last job, across years, and counts per year", () => {
+    const rows = [gig({ gigDate: "2026-11-02" }), gig({ gigDate: "2027-01-09" }), gig({ gigDate: "2027-01-10" })];
+    expect(jobsOverTime(rows, "month", TODAY).map((bar) => bar.key)).toEqual(["2026-11", "2026-12", "2027-01"]);
+    expect(jobsOverTime(rows, "year", TODAY).map((bar) => [bar.key, bar.jobs])).toEqual([
       ["2026", 1],
+      ["2027", 2],
     ]);
   });
 
-  it("is empty with no gigs", () => {
-    expect(countsByPeriod([], { from: "2026-01-01", to: "2026-12-31" })).toEqual([]);
+  it("starts where it's told, and is just this month with no jobs", () => {
+    expect(jobsOverTime([gig({ gigDate: "2026-09-01" })], "month", TODAY, "2026-08").map((bar) => bar.key)).toEqual([
+      "2026-08",
+      "2026-09",
+    ]);
+    expect(jobsOverTime([], "month", TODAY).map((bar) => bar.key)).toEqual(["2026-09"]);
+  });
+});
+
+describe("rankings", () => {
+  const rows = [
+    gig({ gigDate: "2026-03-01" }),
+    gig({ gigDate: "2026-03-08", price: 400 }),
+    gig({ person: "Berko", personKey: "berko", location: "Chinka", locationKey: "chinka", gigDate: "2026-04-01", price: 2000 }),
+    gig({ person: null, personKey: null, location: null, locationKey: null, gigDate: "2026-04-02" }),
+    gig({ person: null, personKey: null, location: null, locationKey: null, gigDate: "2026-04-03" }),
+    gig({ person: null, personKey: null, location: null, locationKey: null, gigDate: "2026-04-04" }),
+    hold({ gigDate: "2026-04-05" }),
+    gig({ gigDate: "2026-05-01", deleted: true }),
+  ];
+
+  it("ranks musicians and places by jobs, leaving out ones with no name", () => {
+    expect(rankPeople(rows).map((top) => [top.label, top.jobs, top.money])).toEqual([
+      ["Kaller", 2, 1000],
+      ["Berko", 1, 2000],
+    ]);
+    expect(rankPlaces(rows)[0]).toMatchObject({ label: "neemas hachaim", jobs: 2 });
+  });
+
+  it("ranks months, half years and years, busiest first", () => {
+    expect(rankPeriods(rows, "month").map((top) => [top.key, top.jobs])).toEqual([
+      ["2026-04", 4],
+      ["2026-03", 2],
+    ]);
+    expect(rankPeriods(rows, "half")[0]).toMatchObject({ key: "2026-H1", label: "Jan–Jun 2026", jobs: 6 });
+    expect(rankPeriods(rows, "year")[0]).toMatchObject({ key: "2026", jobs: 6 });
+  });
+
+  it("finds the four headlines, with paid most going by money", () => {
+    const top = leaders(rows);
+    expect(top.place?.label).toBe("neemas hachaim");
+    expect(top.hiredMost?.label).toBe("Kaller");
+    expect(top.paidMost).toMatchObject({ label: "Berko", money: 2000 });
+    expect(top.busiestMonth).toMatchObject({ key: "2026-04", label: "April 2026", jobs: 4 });
+    expect(leaders([])).toEqual({ place: null, hiredMost: null, paidMost: null, busiestMonth: null });
+  });
+
+  it("finds the next job, today included", () => {
+    expect(nextJob([gig({ gigDate: "2026-10-01" }), hold({ gigDate: TODAY }), gig({ gigDate: TODAY })], TODAY)?.gigDate).toBe(TODAY);
+    expect(nextJob([gig({ gigDate: "2026-01-01" })], TODAY)).toBeNull();
   });
 });
 
@@ -315,13 +339,13 @@ describe("wanted", () => {
     const rows = [gig({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-03-01" }), wanted({ gigDate: "2026-04-01" })];
     const stats = computeStats(rows, DEFAULT_FILTERS, TODAY);
     expect(stats.tiles).toMatchObject({ jobs: 1, earned: 600, openHolds: 0, wanted: 2 });
-    expect(stats.byPeriod.reduce((total, period) => total + period.jobs, 0)).toBe(1);
+    expect(jobsOverTime(rows, "month", TODAY).reduce((total, bar) => total + bar.jobs, 0)).toBe(1);
   });
 
 });
 
-describe("personProfile", () => {
-  it("gives a person's usual price, range, totals and dates", () => {
+describe("profile", () => {
+  it("gives a musician's usual price, range, totals, dates and favorites", () => {
     const rows = [
       gig({ price: 500, gigDate: "2026-02-01" }),
       gig({ price: 600, gigDate: "2026-05-01", location: "Boro Park", locationKey: "boro park" }),
@@ -330,9 +354,8 @@ describe("personProfile", () => {
       gig({ person: "Weiss", personKey: "weiss", price: 2000 }),
       gig({ status: "wanted", titleKeyword: null, gigDate: "2026-07-01" }),
     ];
-    const profile = personProfile(rows, { ...DEFAULT_FILTERS, person: "kaller", lead: "3m" }, TODAY)!;
-    expect(profile).toMatchObject({
-      label: "Kaller",
+    const card = profile(rows, { ...DEFAULT_FILTERS, person: "kaller", lead: "3m" }, TODAY);
+    expect(card).toMatchObject({
       jobs: 4,
       played: 2,
       upcomingJobs: 2,
@@ -346,7 +369,22 @@ describe("personProfile", () => {
       nextGig: "2026-10-01",
       wanted: 1,
     });
-    expect(profile.topPlaces[0]).toEqual({ label: "neemas hachaim", jobs: 3 });
-    expect(personProfile(rows, DEFAULT_FILTERS, TODAY)).toBeNull();
+    expect(card.topPlaces[0]).toMatchObject({ label: "neemas hachaim", jobs: 3 });
+    expect(card.topPeople.map((top) => top.label)).toEqual(["Kaller"]);
+    // Every month has one job, so the one that paid most wins.
+    expect(card.busiestMonth).toMatchObject({ key: "2026-10", jobs: 1, money: 900 });
+  });
+
+  it("covers one place, in the dates picked", () => {
+    const rows = [
+      gig({ location: "Chinka", locationKey: "chinka", gigDate: "2026-02-01" }),
+      gig({ location: "Chinka", locationKey: "chinka", person: "Berko", personKey: "berko", gigDate: "2026-09-01" }),
+      gig({ location: "Chinka", locationKey: "chinka", person: "Berko", personKey: "berko", gigDate: "2026-09-02" }),
+      gig({ gigDate: "2026-09-03" }),
+    ];
+    const card = profile(rows, { ...DEFAULT_FILTERS, location: "chinka", range: "year" }, TODAY);
+    expect(card).toMatchObject({ jobs: 3, earned: 1800 });
+    expect(card.topPeople[0]).toMatchObject({ label: "Berko", jobs: 2 });
+    expect(profile(rows, { ...DEFAULT_FILTERS, location: "chinka", range: "month" }, TODAY).jobs).toBe(2);
   });
 });

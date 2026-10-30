@@ -1,11 +1,11 @@
 import type { Day } from "./dates";
 import {
-  dateBounds,
   inScope,
-  LEAD_BUCKETS,
-  leadBucket,
   NONE_KEY,
   type Filters,
+  periodLabel,
+  periodOf,
+  type PeriodPer,
   type SortKey,
   type Status,
 } from "./filters";
@@ -31,11 +31,6 @@ export type GigRow = {
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-/** Past this many months, "by month" becomes "by year". */
-const MAX_MONTHS = 36;
-
-export type PeriodCount = { key: string; label: string; full: string; jobs: number };
-export type LeadBar = { key: string; label: string; jobs: number };
 
 export function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -101,50 +96,39 @@ const byLabel = (a: { label: string }, b: { label: string }) =>
   a.label.localeCompare(b.label, "en", { sensitivity: "base" });
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const LONG_MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
-/** Jobs per month across the range, including empty months. Per year if that's too many months. */
-export function countsByPeriod(rows: GigRow[], bounds: { from: Day | null; to: Day | null }): PeriodCount[] {
-  if (rows.length === 0) return [];
-  const dates = rows.map((row) => row.gigDate).sort();
-  const start = bounds.from ?? dates[0];
-  const end = bounds.to ?? dates[dates.length - 1];
-  if (end < start) return [];
+/** One bar of the Overview chart: a month ("2026-11") or a year ("2026"). */
+export type TimeBar = { key: string; label: string; full: string; jobs: number };
 
-  const [startYear, startMonth] = [Number(start.slice(0, 4)), Number(start.slice(5, 7)) - 1];
-  const [endYear, endMonth] = [Number(end.slice(0, 4)), Number(end.slice(5, 7)) - 1];
-  const months = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
-  const yearly = months > MAX_MONTHS;
-  const oneYear = startYear === endYear;
+function nextPeriod(key: string): string {
+  if (key.length === 4) return String(Number(key) + 1);
+  const [year, month] = key.split("-").map(Number);
+  return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
+}
 
-  const periods: PeriodCount[] = [];
-  if (yearly) {
-    for (let year = startYear; year <= endYear; year++) {
-      periods.push({ key: String(year), label: String(year), full: String(year), jobs: 0 });
-    }
-  } else {
-    for (let i = 0; i < months; i++) {
-      const year = startYear + Math.floor((startMonth + i) / 12);
-      const month = (startMonth + i) % 12;
-      periods.push({
-        key: `${year}-${String(month + 1).padStart(2, "0")}`,
-        label: oneYear ? MONTHS[month] : `${MONTHS[month]} ’${String(year).slice(2)}`,
-        full: `${LONG_MONTHS[month]} ${year}`,
-        jobs: 0,
-      });
-    }
+/**
+ * Jobs per month (or year) with no gaps, from the first job (or `start`) through the
+ * last one or this month, whichever is later.
+ */
+export function jobsOverTime(rows: GigRow[], per: "month" | "year", today: Day, start?: string): TimeBar[] {
+  const keys = rows
+    .filter((row) => !row.deleted && row.status === "job")
+    .map((row) => periodOf(row.gigDate, per))
+    .sort();
+  const now = periodOf(today, per);
+  const first = start ?? keys[0] ?? now;
+  const last = (keys.at(-1) ?? now) > now ? keys.at(-1)! : now;
+  const bars: TimeBar[] = [];
+  for (let key = first; key <= last; key = nextPeriod(key)) {
+    const label = per === "year" ? key : MONTHS[Number(key.slice(5, 7)) - 1];
+    bars.push({ key, label, full: periodLabel(key), jobs: 0 });
   }
-
-  const index = new Map(periods.map((period, i) => [period.key, i]));
-  for (const row of rows) {
-    const period = periods[index.get(yearly ? row.gigDate.slice(0, 4) : row.gigDate.slice(0, 7)) ?? -1];
-    if (!period) continue;
-    if (row.status === "job") period.jobs += 1;
+  const index = new Map(bars.map((bar, i) => [bar.key, i]));
+  for (const key of keys) {
+    const bar = bars[index.get(key) ?? -1];
+    if (bar) bar.jobs += 1;
   }
-  return periods;
+  return bars;
 }
 
 function hasLead(row: GigRow): row is GigRow & { leadDays: number } {
@@ -156,7 +140,6 @@ function sum(rows: GigRow[]): number {
 }
 
 export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
-  const bounds = dateBounds(filters, today);
   const live = rows.filter((row) => !row.deleted);
   const inRange = live.filter((row) => inScope(row, filters, today));
   const wanted = inRange.filter((row) => row.status === "wanted");
@@ -176,12 +159,10 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
     .filter((row) => row.heldAt && row.confirmedAt)
     .map((row) => Math.max(0, Math.floor((row.confirmedAt!.getTime() - row.heldAt!.getTime()) / MS_PER_DAY)));
 
-  // Lead times and the charts count booked jobs only.
-  const withLead = jobs.filter(hasLead);
-  const leads = withLead.map((row) => row.leadDays);
+  // Lead times count booked jobs only.
+  const leads = jobs.filter(hasLead).map((row) => row.leadDays);
 
   return {
-    bounds,
     tiles: {
       jobs: jobs.length,
       pastJobs: pastJobs.length,
@@ -206,22 +187,68 @@ export function computeStats(rows: GigRow[], filters: Filters, today: Day) {
       /** Dates he was asked for but wasn't free. */
       wanted: wanted.length,
     },
-    leadHistogram: LEAD_BUCKETS.map(
-      (bucket): LeadBar => ({
-        key: bucket.key,
-        label: bucket.label,
-        jobs: withLead.filter((row) => leadBucket(row.leadDays) === bucket.key).length,
-      }),
-    ),
-    byPeriod: countsByPeriod(jobs, bounds),
   };
 }
 
 export type Stats = ReturnType<typeof computeStats>;
+export type Lead = Pick<Stats["tiles"], "leadShortest" | "leadMedian" | "leadAverage" | "leadLongest">;
 
-/** Everything about one person who hires him, for the card at the top of their Overview. */
-export type Profile = {
-  label: string;
+/** A musician, place or period, with its jobs and what they paid. */
+export type Top = { key: string; label: string; jobs: number; money: number };
+
+const mostJobs = (a: Top, b: Top) => b.jobs - a.jobs || b.money - a.money || byLabel(a, b);
+const mostMoney = (a: Top, b: Top) => b.money - a.money || b.jobs - a.jobs || byLabel(a, b);
+
+/** Most jobs first, then most money, leaving out jobs with no name (or no place). */
+function ranked(groups: Group[]): Top[] {
+  return groups
+    .filter((group) => group.key !== NONE_KEY)
+    .map((group) => ({ key: group.key, label: group.label, jobs: group.rows.length, money: sum(group.rows) }))
+    .sort(mostJobs);
+}
+
+const liveJobs = (rows: GigRow[]) => rows.filter((row) => !row.deleted && row.status === "job");
+
+/** Who books him, most jobs first. */
+export const rankPeople = (rows: GigRow[]) => ranked(byPerson(liveJobs(rows)));
+/** Where he plays, most jobs first. */
+export const rankPlaces = (rows: GigRow[]) => ranked(byLocation(liveJobs(rows)));
+
+/** Months (or half years, or years) with jobs, busiest first: most jobs, then most money, then the latest. */
+export function rankPeriods(rows: GigRow[], per: PeriodPer): Top[] {
+  const periods = new Map<string, Top>();
+  for (const row of liveJobs(rows)) {
+    const key = periodOf(row.gigDate, per);
+    const period = periods.get(key) ?? { key, label: periodLabel(key), jobs: 0, money: 0 };
+    period.jobs += 1;
+    period.money += row.price ?? 0;
+    periods.set(key, period);
+  }
+  return [...periods.values()].sort((a, b) => b.jobs - a.jobs || b.money - a.money || b.key.localeCompare(a.key));
+}
+
+/** The Stats tab's four headlines, over every gig. */
+export function leaders(rows: GigRow[]) {
+  const people = rankPeople(rows);
+  return {
+    place: rankPlaces(rows)[0] ?? null,
+    hiredMost: people[0] ?? null,
+    paidMost: [...people].sort(mostMoney).find((person) => person.money > 0) ?? null,
+    busiestMonth: rankPeriods(rows, "month")[0] ?? null,
+  };
+}
+
+/** The next booked job, today included. */
+export function nextJob(rows: GigRow[], today: Day): GigRow | null {
+  return (
+    liveJobs(rows)
+      .filter((row) => row.gigDate >= today)
+      .sort((a, b) => a.gigDate.localeCompare(b.gigDate))[0] ?? null
+  );
+}
+
+/** Everything about one musician, place or stretch of time: the numbers on a Stats card. */
+export type Profile = Lead & {
   jobs: number;
   played: number;
   upcomingJobs: number;
@@ -233,35 +260,30 @@ export type Profile = {
   priced: number;
   earned: number;
   upcoming: number;
-  leadMedian: number | null;
-  leadShortest: number | null;
-  leadLongest: number | null;
   lastGig: Day | null;
   nextGig: Day | null;
   openHolds: number;
   holdRate: number | null;
   wanted: number;
-  /** Where they book him most, by jobs. */
-  topPlaces: { label: string; jobs: number }[];
+  /** Who books him most here, and where he plays most for them. */
+  topPeople: Top[];
+  topPlaces: Top[];
+  busiestMonth: Top | null;
 };
 
 /**
- * One person's numbers in the chosen dates (and place, if one is picked).
+ * The numbers for the gigs that pass the filters (dates, and a musician or place).
  * Ignores the lead-time filter so the card always shows the whole picture.
  */
-export function personProfile(rows: GigRow[], filters: Filters, today: Day): Profile | null {
-  if (!filters.person) return null;
-  const all = computeStats(rows, { ...filters, lead: null }, today);
-  const mine = rows.filter(
-    (row) => !row.deleted && inScope(row, { ...filters, lead: null }, today),
-  );
+export function profile(rows: GigRow[], filters: Filters, today: Day): Profile {
+  const scope = { ...filters, lead: null };
+  const all = computeStats(rows, scope, today);
+  const mine = rows.filter((row) => !row.deleted && inScope(row, scope, today));
   const jobs = mine.filter((row) => row.status === "job");
   const prices = jobs.flatMap((row) => (row.price === null ? [] : [row.price]));
   const past = jobs.filter((row) => row.gigDate < today).map((row) => row.gigDate).sort();
   const future = jobs.filter((row) => row.gigDate >= today).map((row) => row.gigDate).sort();
-  const label = byPerson(mine)[0]?.label ?? filters.person;
   return {
-    label,
     jobs: jobs.length,
     played: past.length,
     upcomingJobs: future.length,
@@ -272,19 +294,18 @@ export function personProfile(rows: GigRow[], filters: Filters, today: Day): Pro
     priced: prices.length,
     earned: all.tiles.earned,
     upcoming: all.tiles.upcoming,
-    leadMedian: all.tiles.leadMedian,
     leadShortest: all.tiles.leadShortest,
+    leadMedian: all.tiles.leadMedian,
+    leadAverage: all.tiles.leadAverage,
     leadLongest: all.tiles.leadLongest,
     lastGig: past.at(-1) ?? null,
     nextGig: future[0] ?? null,
     openHolds: all.tiles.openHolds,
     holdRate: all.tiles.holdRate,
     wanted: all.tiles.wanted,
-    topPlaces: byLocation(jobs)
-      .filter((place) => place.key !== NONE_KEY)
-      .map((place) => ({ label: place.label, jobs: place.rows.length }))
-      .sort((a, b) => b.jobs - a.jobs || byLabel(a, b))
-      .slice(0, 3),
+    topPeople: rankPeople(jobs).slice(0, 3),
+    topPlaces: rankPlaces(jobs).slice(0, 3),
+    busiestMonth: rankPeriods(jobs, "month")[0] ?? null,
   };
 }
 
