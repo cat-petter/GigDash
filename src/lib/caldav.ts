@@ -1,5 +1,7 @@
 import { createDAVClient, type DAVCalendar } from "tsdav";
 import type { GigCalendar } from "@/generated/prisma/client";
+import type { CalendarNames } from "./calendar-names";
+import type { IcloudCredentials } from "./credentials";
 
 const SERVER_URL = "https://caldav.icloud.com";
 const TIMEOUT_MS = 45_000;
@@ -17,22 +19,6 @@ export type FetchedCalendar = {
   objects: CalendarObject[];
 };
 
-type Env = Record<string, string | undefined>;
-
-export type CalendarNames = { gigs: string; holds: string | null; wanted: string };
-
-/**
- * The calendar names from the environment. An empty HOLDS_CALENDAR means there is no holds calendar yet.
- * The wanted calendar (dates he was asked for but wasn't free) is read only if it exists.
- */
-export function calendarNames(env: Env = process.env): CalendarNames {
-  return {
-    gigs: env.GIGS_CALENDAR?.trim() || "Gigs",
-    holds: env.HOLDS_CALENDAR?.trim() || null,
-    wanted: env.WANTED_CALENDAR?.trim() || "Wanted",
-  };
-}
-
 /** Refuses any request that could change the calendar, so the app can only ever read it. */
 const readOnlyFetch: typeof fetch = (input, init) => {
   const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
@@ -42,20 +28,11 @@ const readOnlyFetch: typeof fetch = (input, init) => {
   return fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(TIMEOUT_MS) });
 };
 
-/** Whether the iCloud sign-in details have been filled in. Says nothing about whether they work. */
-export function icloudConfigured(env: Env = process.env): boolean {
-  return Boolean(env.ICLOUD_EMAIL?.trim() && env.ICLOUD_APP_PASSWORD?.trim());
-}
-
-async function connect() {
-  const username = process.env.ICLOUD_EMAIL?.trim();
-  const password = process.env.ICLOUD_APP_PASSWORD?.trim();
-  if (!username || !password) throw new Error("ICLOUD_EMAIL and ICLOUD_APP_PASSWORD must both be set");
-
+async function connect({ email, password }: IcloudCredentials) {
   try {
     return await createDAVClient({
       serverUrl: SERVER_URL,
-      credentials: { username, password },
+      credentials: { username: email, password },
       authMethod: "Basic",
       defaultAccountType: "caldav",
       fetch: readOnlyFetch,
@@ -63,7 +40,7 @@ async function connect() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Couldn't sign in to iCloud (${message}). Check ICLOUD_EMAIL, and that ICLOUD_APP_PASSWORD is an app-specific password that hasn't been revoked.`,
+      `Couldn't sign in to iCloud (${message}). Check the iCloud email, and that the password is an app-specific password that hasn't been revoked.`,
     );
   }
 }
@@ -81,21 +58,21 @@ function eventCalendars(calendars: DAVCalendar[]): DAVCalendar[] {
   return calendars.filter((calendar) => !calendar.components?.length || calendar.components.includes("VEVENT"));
 }
 
-function findCalendar(calendars: DAVCalendar[], name: string, variable: string): DAVCalendar {
+function findCalendar(calendars: DAVCalendar[], name: string): DAVCalendar {
   const wanted = name.toLowerCase();
   const matches = calendars.filter((calendar) => nameOf(calendar).toLowerCase() === wanted);
   if (matches.length === 1) return matches[0];
 
   const names = calendars.map((calendar) => `"${nameOf(calendar)}"`).join(", ");
   if (matches.length > 1) {
-    throw new Error(`There are ${matches.length} calendars named "${name}". Rename one so ${variable} is unambiguous.`);
+    throw new Error(`There are ${matches.length} calendars named "${name}". Rename one in Apple Calendar.`);
   }
-  throw new Error(`No calendar named "${name}" (from ${variable}). The calendars on this account are: ${names}.`);
+  throw new Error(`No calendar named "${name}". Check the names under Settings → Calendar. The calendars on this account are: ${names}.`);
 }
 
 /** Names of the event calendars on the account, for the status page. Reads no events. */
-export async function listCalendarNames(): Promise<string[]> {
-  const client = await connect();
+export async function listCalendarNames(credentials: IcloudCredentials): Promise<string[]> {
+  const client = await connect(credentials);
   return eventCalendars(await client.fetchCalendars()).map(nameOf);
 }
 
@@ -103,27 +80,27 @@ export async function listCalendarNames(): Promise<string[]> {
  * Fetches every event in the gigs, holds and wanted calendars, found by name.
  * No other calendar's events are requested.
  */
-export async function fetchGigCalendars(names: CalendarNames = calendarNames()): Promise<FetchedCalendar[]> {
-  const client = await connect();
+export async function fetchGigCalendars(credentials: IcloudCredentials, names: CalendarNames): Promise<FetchedCalendar[]> {
+  const client = await connect(credentials);
   const calendars = eventCalendars(await client.fetchCalendars());
 
   const wanted: { calendar: GigCalendar; dav: DAVCalendar }[] = [
-    { calendar: "gigs", dav: findCalendar(calendars, names.gigs, "GIGS_CALENDAR") },
+    { calendar: "gigs", dav: findCalendar(calendars, names.gigs) },
   ];
   if (names.holds) {
-    const holds = findCalendar(calendars, names.holds, "HOLDS_CALENDAR");
+    const holds = findCalendar(calendars, names.holds);
     if (holds.url === wanted[0].dav.url) {
-      throw new Error("GIGS_CALENDAR and HOLDS_CALENDAR name the same calendar");
+      throw new Error("The gigs and holds calendars are the same calendar");
     }
     wanted.push({ calendar: "holds", dav: holds });
   }
   const asked = calendars.filter((calendar) => nameOf(calendar).toLowerCase() === names.wanted.toLowerCase());
   if (asked.length > 1) {
-    throw new Error(`There are ${asked.length} calendars named "${names.wanted}". Rename one so WANTED_CALENDAR is unambiguous.`);
+    throw new Error(`There are ${asked.length} calendars named "${names.wanted}". Rename one in Apple Calendar.`);
   }
   if (asked.length === 1) {
     if (wanted.some(({ dav }) => dav.url === asked[0].url)) {
-      throw new Error("WANTED_CALENDAR names the same calendar as GIGS_CALENDAR or HOLDS_CALENDAR");
+      throw new Error("The wanted calendar is the same calendar as the gigs or holds one");
     }
     wanted.push({ calendar: "wanted", dav: asked[0] });
   }

@@ -149,7 +149,16 @@ Every database call takes a `userId` and filters on it. Callers get it from `cur
 - `src/app/page.tsx`: per-user greeting, time zone and calendar names.
 - The Prisma extension (`forUser(userId)`) that adds `userId` to every `where` and `data` for those models.
 
-### 5. Settings that move from env vars to the database
+### 5. Settings that move from env vars to the database — done
+
+Done, with these choices:
+- `src/lib/credentials.ts` has `encrypt`/`decrypt`, `calendarSettings` (no password in it, so pages never decrypt), `icloudCredentials` (only the sync and the connection checks call it) and the form's checks. `src/lib/settings-store.ts` reads and writes them. `CREDENTIALS_KEY` is 32 bytes in base64 and is key version 1; to replace it, add `CREDENTIALS_KEY_2`. Old values still read until they're saved again.
+- Settings → Calendar is one form: name, iCloud email, app password, calendar names, time zone, track-from date. Saving signs in to iCloud first and refuses a wrong password or a calendar that isn't there, so nothing bad gets stored. An empty password keeps the saved one, unless the email changed: a saved password is only tried on the account it came with. Test connection and Disconnect are beside it.
+- 10 iCloud sign-ins per 15 minutes per user from this form, so wrong passwords can't get an Apple account locked and the form can't be used to try stolen logins.
+- The owner's fallback is all or nothing: until he saves the form, his name, time zone, calendar names and iCloud login come from the env vars, and the form starts filled in with them, so saving with the password empty moves them over. `TRACK_FROM` has no fallback, as planned: it's no longer read.
+- Pulled forward from phase 6, so a connected account can use its calendar: Sync now and syncing on open work for any connected user. The cron still syncs only the owner until phase 6.
+- A new user's empty dashboard links to Settings → Calendar, and the Settings tab now opens with no gigs.
+- Verified locally against the throwaway Postgres, with `listCalendarNames` and `fetchGigCalendars` temporarily faked for one address: a wrong password and a missing calendar save nothing and keep what was typed except the password; a good save stores only ciphertext and the first sync uses the decrypted password; keeping the password; a changed email needing one; Test connection; the 11th sign-in refused; Sync now 200 → 429; Disconnect removes the row and keeps the gigs; the password never appears in the page; the owner moving from env vars to a saved account with the password empty; 375px wide. **Not yet checked against real iCloud:** that needs `CREDENTIALS_KEY` on the preview and a real app password.
 
 | Env var now | Moves to | Fallback during the transition |
 |---|---|---|
@@ -196,7 +205,7 @@ Code changes:
 
 1. Buy the domain, verify it in Resend, and add it to the Vercel project and to the Turnstile widget's hostnames.
 2. On a Neon branch made from production: run the migration, deploy the branch as a preview pointed at it, log in with `DASHBOARD_PASSWORD`, and check the numbers match production.
-3. Add the new env vars to Production in Vercel.
+3. Add the new env vars to Production in Vercel. Check Production's `TRACK_FROM` first: the app stops reading it, and uses the owner's `trackFrom` (2026-10-20 from the migration). If it's set to anything else, change that date in Settings → Calendar right after the merge, because the first sync removes gigs before it.
 4. Take a Neon backup (or branch) of production, then merge `multi-account` into `main`. The production build runs the migration and the app keeps working: same data, same password, same iCloud env vars.
 5. Owner logs in with `DASHBOARD_PASSWORD` and adds his email from the dashboard, then confirms it. He must not sign up with that email on the login page first: that makes a separate empty account, and the email is then taken, so adding it to the owner silently does nothing. Then he fills in the Calendar section. After that, delete `DASHBOARD_PASSWORD`, `ICLOUD_*`, `*_CALENDAR`, `APP_TIMEZONE`, `TRACK_FROM` and `YOUR_NAME` from Vercel.
 6. A later small change removes the env fallbacks from the code.

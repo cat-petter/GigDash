@@ -1,22 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { TRACKING_STARTED, trackFrom } from "./dates";
+import { isDay, isTimeZone } from "./dates";
 
-describe("trackFrom", () => {
-  it("starts from the day he started fresh when TRACK_FROM isn't set", () => {
-    expect(trackFrom({})).toBe(TRACKING_STARTED);
-    expect(trackFrom({ TRACK_FROM: "  " })).toBe(TRACKING_STARTED);
+describe("isDay", () => {
+  it("takes a real date and nothing else", () => {
+    expect(isDay("2025-06-01")).toBe(true);
+    expect(isDay("June 2025")).toBe(false);
+    expect(isDay("2025-02-30")).toBe(false);
   });
+});
 
-  it("reads everything for 'all'", () => {
-    expect(trackFrom({ TRACK_FROM: "all" })).toBeNull();
-  });
-
-  it("reads a date", () => {
-    expect(trackFrom({ TRACK_FROM: " 2025-06-01 " })).toBe("2025-06-01");
-  });
-
-  it("refuses anything that isn't a real date", () => {
-    expect(() => trackFrom({ TRACK_FROM: "June 2025" })).toThrow(/TRACK_FROM/);
-    expect(() => trackFrom({ TRACK_FROM: "2025-02-30" })).toThrow(/TRACK_FROM/);
+describe("isTimeZone", () => {
+  it("takes a zone name and nothing else", () => {
+    expect(isTimeZone("America/New_York")).toBe(true);
+    expect(isTimeZone("Mars/Olympus")).toBe(false);
+    expect(isTimeZone("")).toBe(false);
   });
 });

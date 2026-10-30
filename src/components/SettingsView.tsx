@@ -1,8 +1,10 @@
 import type { SessionUser } from "@/lib/auth";
+import type { CalendarSettings } from "@/lib/credentials";
 import { type Filters, SECTIONS, withFilter } from "@/lib/filters";
 import { plural } from "@/lib/format";
 import type { MatchRules, NameKind, Names } from "@/lib/names";
 import { AccountSettings } from "./AccountSettings";
+import { CalendarForm } from "./CalendarForm";
 import { Card } from "./Card";
 import { NamesManager } from "./NamesManager";
 import { RulesForm } from "./RulesForm";
@@ -22,12 +24,14 @@ export function SettingsView({
   places,
   rules,
   user,
+  settings,
 }: {
   filters: Filters;
   people: Names;
   places: Names;
   rules: Record<NameKind, MatchRules>;
   user: SessionUser;
+  settings: CalendarSettings;
 }) {
   return (
     <>
@@ -40,6 +44,11 @@ export function SettingsView({
       {filters.section === "people" && <NamesManager kind="person" groups={people.groups} />}
       {filters.section === "places" && <NamesManager kind="place" groups={places.groups} />}
       {filters.section === "account" && <AccountSettings user={user} />}
+      {filters.section === "calendar" && (
+        <Card title="iCloud calendar" note="This app only ever reads your calendars. It never changes anything in them.">
+          <CalendarForm settings={settings} zones={Intl.supportedValuesOf("timeZone")} />
+        </Card>
+      )}
       {filters.section === "rules" && (
         <>
           <p className="px-1 text-sm text-muted">

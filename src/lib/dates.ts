@@ -4,14 +4,20 @@ export type Day = string;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** APP_TIMEZONE, the zone lead times and "today" are counted in. */
-export function appTimeZone(): string {
-  const zone = process.env.APP_TIMEZONE?.trim() || "America/New_York";
+export function isTimeZone(zone: string): boolean {
+  if (!zone) return false;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
   } catch {
-    throw new Error(`APP_TIMEZONE "${zone}" isn't a time zone name like America/New_York`);
+    return false;
   }
+}
+
+/** APP_TIMEZONE, for scripts/seed-demo.ts. The app uses each user's own zone (see credentials.ts). */
+export function appTimeZone(): string {
+  const zone = process.env.APP_TIMEZONE?.trim() || "America/New_York";
+  if (!isTimeZone(zone)) throw new Error(`APP_TIMEZONE "${zone}" isn't a time zone name like America/New_York`);
   return zone;
 }
 
@@ -20,23 +26,6 @@ export function isDay(value: string): value is Day {
   if (!DAY.test(value)) return false;
   const time = Date.parse(`${value}T00:00:00Z`);
   return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value;
-}
-
-type Env = Record<string, string | undefined>;
-
-/** The day he started fresh. The calendar was an everyday one before, so earlier events are noise. */
-export const TRACKING_STARTED: Day = "2026-10-20";
-
-/**
- * The first gig date the app tracks. Events before it are ignored and removed. TRACK_FROM
- * overrides TRACKING_STARTED with another date, or "all" for everything (null).
- */
-export function trackFrom(env: Env = process.env): Day | null {
-  const value = env.TRACK_FROM?.trim();
-  if (!value) return TRACKING_STARTED;
-  if (value.toLowerCase() === "all") return null;
-  if (!isDay(value)) throw new Error(`TRACK_FROM must be a date like 2025-01-01, not "${value}"`);
-  return value;
 }
 
 /** The calendar day an instant falls on in the given time zone. */

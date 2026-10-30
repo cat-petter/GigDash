@@ -9,15 +9,15 @@ import { SettingsView } from "@/components/SettingsView";
 import { StatsView } from "@/components/StatsView";
 import { SyncButton } from "@/components/SyncButton";
 import { TabBar } from "@/components/TabBar";
-import { calendarNames, icloudConfigured } from "@/lib/caldav";
-import { requireUser, usesEnvCalendar } from "@/lib/dal";
-import { appTimeZone, dayInZone } from "@/lib/dates";
-import { type Filters, parseFilters, TABS } from "@/lib/filters";
+import { requireUser } from "@/lib/dal";
+import { dayInZone } from "@/lib/dates";
+import { DEFAULT_FILTERS, type Filters, parseFilters, TABS, withFilter } from "@/lib/filters";
 import { greeting } from "@/lib/format";
 import { loadGigs } from "@/lib/gigs";
 import type { Names } from "@/lib/names";
 import { OWNER_PLACEHOLDER_EMAIL } from "@/lib/owner";
 import { autoSync, syncStatus } from "@/lib/run-sync";
+import { loadSettings } from "@/lib/settings-store";
 import { filterOptions, gigList, needsAttention } from "@/lib/stats";
 
 /** An old link may name one spelling ("kaler"); it now means whoever that spelling belongs to. */
@@ -25,6 +25,8 @@ function groupId(names: Names, key: string | null): string | null {
   if (key === null || names.groups.some((group) => group.id === key)) return key;
   return names.byKey.get(key)?.id ?? key;
 }
+
+const CALENDAR_SETTINGS = withFilter(DEFAULT_FILTERS, { tab: "settings", section: "calendar" });
 
 function Notice({ children }: { children: React.ReactNode }) {
   return <p className="rounded-xl border border-warn/40 px-3 py-2 text-sm text-warn">{children}</p>;
@@ -36,16 +38,8 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
   await connection();
   const asked = parseFilters(await searchParams);
 
-  let timeZone = "America/New_York";
-  let zoneProblem = false;
-  try {
-    timeZone = appTimeZone();
-  } catch {
-    zoneProblem = true;
-  }
-
-  const ownCalendar = usesEnvCalendar(user);
-  const connected = ownCalendar && icloudConfigured();
+  const settings = await loadSettings(userId);
+  const { timeZone, zoneProblem, connected } = settings;
   if (connected) await autoSync(userId, 2000);
 
   const now = new Date();
@@ -57,11 +51,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     location: groupId(places, asked.location),
   };
 
-  // The Overview greets the owner by name (YOUR_NAME); the other tabs are titled by name.
+  // The Overview greets them by name; the other tabs are titled by name.
   const title =
     filters.tab === "overview"
-      ? greeting(now, timeZone, (ownCalendar && process.env.YOUR_NAME?.trim()) || undefined)
+      ? greeting(now, timeZone, settings.name || undefined)
       : TABS.find((tab) => tab.key === filters.tab)!.label;
+
+  const onCalendarSettings = filters.tab === "settings" && filters.section === "calendar";
 
   const header = (
     <header className="flex items-start justify-between gap-4">
@@ -71,24 +67,24 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
           Status
         </Link>
       </div>
-      {ownCalendar && <SyncButton {...sync} />}
+      {connected && <SyncButton {...sync} />}
     </header>
   );
 
   const notices = (
     <>
       {user.email === OWNER_PLACEHOLDER_EMAIL && <AddEmailCard />}
-      {!connected && (
+      {!connected && !onCalendarSettings && rows.some((row) => !row.deleted) && (
         <Notice>
-          iCloud isn&apos;t connected yet, so this only shows gigs that are already saved.{" "}
-          <Link href="/status" className="underline">
-            See Status
+          iCloud isn&apos;t connected, so this only shows gigs that are already saved.{" "}
+          <Link href={CALENDAR_SETTINGS} className="underline">
+            Connect it
           </Link>
         </Notice>
       )}
       {zoneProblem && (
         <Notice>
-          APP_TIMEZONE isn&apos;t a time zone this app knows, so dates are counted in New York time.{" "}
+          {zoneProblem}, so dates are counted in New York time.{" "}
           <Link href="/status" className="underline">
             See Status
           </Link>
@@ -97,13 +93,13 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     </>
   );
 
-  if (rows.every((row) => row.deleted)) {
+  if (rows.every((row) => row.deleted) && filters.tab !== "settings") {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-6">
         {header}
         {notices}
         <Card title="No gigs yet">
-          {ownCalendar ? (
+          {connected ? (
             <p className="text-sm text-muted">
               Once the app reads your calendars, your gigs show up here. Tap Sync now, or open{" "}
               <Link href="/status" className="text-accent">
@@ -113,7 +109,10 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
             </p>
           ) : (
             <p className="text-sm text-muted">
-              Your gigs show up here once your iCloud calendar is connected. That&apos;s coming soon.
+              Your gigs show up here once your iCloud calendar is connected.{" "}
+              <Link href={CALENDAR_SETTINGS} className="text-accent">
+                Connect it
+              </Link>
             </p>
           )}
         </Card>
@@ -134,7 +133,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
       <PendingProvider>
         <PendingFrame>
           {filters.tab === "settings" ? (
-            <SettingsView filters={filters} people={people} places={places} rules={rules} user={user} />
+            <SettingsView filters={filters} people={people} places={places} rules={rules} user={user} settings={settings} />
           ) : filters.tab === "gigs" ? (
             <GigsView
               gigs={gigList(rows, filters, today)}
@@ -147,7 +146,7 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
           ) : filters.tab === "stats" ? (
             <StatsView rows={rows} filters={filters} today={today} people={options.people} places={options.locations} />
           ) : (
-            <OverviewView rows={rows} today={today} attention={needsAttention(rows)} calendars={calendarNames(ownCalendar ? process.env : {})} />
+            <OverviewView rows={rows} today={today} attention={needsAttention(rows)} calendars={settings.names} />
           )}
         </PendingFrame>
         <TabBar filters={filters} />

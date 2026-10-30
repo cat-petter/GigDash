@@ -1,4 +1,4 @@
-import type { CalendarNames } from "@/lib/caldav";
+import type { CalendarNames } from "@/lib/calendar-names";
 import { formatDay, plural } from "@/lib/format";
 import type { Attention, GigRow } from "@/lib/stats";
 

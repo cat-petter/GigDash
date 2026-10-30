@@ -7,6 +7,8 @@ import {
   LINKS_PER_MAILBOX,
   linkLimitProblem,
   mailboxOf,
+  CONNECTION_CHECKS,
+  connectionCheckAllowed,
   manualSyncWait,
   spendDailyEmail,
 } from "./limits";
@@ -97,6 +99,17 @@ describe("spendDailyEmail", () => {
   it("names the counter after the UTC date", () => {
     expect(dailyEmailKey(new Date("2026-10-30T23:59:59Z"))).toBe("emails:2026-10-30");
     expect(dailyEmailKey(new Date("2026-10-31T00:00:00Z"))).toBe("emails:2026-10-31");
+  });
+});
+
+describe("connectionCheckAllowed", () => {
+  it("allows a few tries per user, then waits for the window to end", async () => {
+    const { hit, advance } = counters();
+    for (let i = 0; i < CONNECTION_CHECKS.max; i++) expect(await connectionCheckAllowed("a", hit)).toBe(true);
+    expect(await connectionCheckAllowed("a", hit)).toBe(false);
+    expect(await connectionCheckAllowed("b", hit)).toBe(true);
+    advance(CONNECTION_CHECKS.windowSeconds);
+    expect(await connectionCheckAllowed("a", hit)).toBe(true);
   });
 });
 

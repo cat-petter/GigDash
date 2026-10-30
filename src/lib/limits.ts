@@ -17,6 +17,9 @@ const DAILY_WINDOW_SECONDS = 2 * 24 * 60 * 60;
 /** Sync now, per user. Syncing on open has its own limit (AUTO_SYNC_AFTER_MS). */
 export const MANUAL_SYNC = { max: 1, windowSeconds: 60 };
 
+/** Sign-ins to iCloud from the Calendar settings, per user: wrong passwords could get an Apple account locked. */
+export const CONNECTION_CHECKS = { max: 10, windowSeconds: 15 * 60 };
+
 export const DAILY_CAP_MESSAGE = "Gigs has sent all the sign-in emails it can today. Please try again tomorrow.";
 
 /** The same inbox however it's spelled: a+1@x.com and A+2@x.com both reach a@x.com. */
@@ -60,6 +63,12 @@ export async function spendDailyEmail(hit: Hit, now = new Date()): Promise<boole
 /** The counter that says how many emails went out today. */
 export function dailyEmailKey(now = new Date()): string {
   return dailyKey(now);
+}
+
+/** Counts a sign-in to iCloud from the Calendar settings. False means it mustn't be tried. */
+export async function connectionCheckAllowed(userId: string, hit: Hit): Promise<boolean> {
+  const { count } = await hit(`icloud-check:${userId}`, CONNECTION_CHECKS.windowSeconds);
+  return count <= CONNECTION_CHECKS.max;
 }
 
 /** Counts a Sync now. Returns how many seconds to wait, or null if it can go ahead. */

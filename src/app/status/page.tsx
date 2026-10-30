@@ -5,14 +5,16 @@ import { Suspense } from "react";
 import type { SyncRun } from "@/generated/prisma/client";
 import { Card } from "@/components/Card";
 import { SyncButton } from "@/components/SyncButton";
-import { calendarNames, listCalendarNames } from "@/lib/caldav";
+import { Badge, CalendarList } from "@/components/CalendarList";
+import { listCalendarNames } from "@/lib/caldav";
+import type { CalendarNames } from "@/lib/calendar-names";
 import { emailsSentToday } from "@/lib/counters";
-import { requireUser, usesEnvCalendar } from "@/lib/dal";
-import { appTimeZone, trackFrom } from "@/lib/dates";
+import { requireUser } from "@/lib/dal";
 import { forUser } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
 import { DAILY_EMAIL_CAP } from "@/lib/limits";
 import { isPending, syncStatus } from "@/lib/run-sync";
+import { loadCredentials, loadSettings } from "@/lib/settings-store";
 
 export const metadata: Metadata = { title: "Status · Gigs" };
 
@@ -20,74 +22,17 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function Badge({ tone, children }: { tone: "good" | "bad" | "warn" | "muted"; children: React.ReactNode }) {
-  const tones = {
-    good: "text-good border-good/40",
-    bad: "text-bad border-bad/40",
-    warn: "text-warn border-warn/40",
-    muted: "text-muted border-line",
-  };
-  return (
-    <span className={`inline-block shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>
-      {children}
-    </span>
-  );
-}
-
 /** Signs in to iCloud and lists the calendar names, which also tests the password. */
-async function Calendars() {
-  const names = calendarNames();
+async function Calendars({ userId, names }: { userId: string; names: CalendarNames }) {
   let found: string[];
   try {
-    found = await listCalendarNames();
+    const credentials = await loadCredentials(userId);
+    if (!credentials) throw new Error("iCloud isn't connected.");
+    found = await listCalendarNames(credentials);
   } catch (error) {
     return <p className="text-sm text-bad">{messageOf(error)}</p>;
   }
-
-  const same = (a: string, b: string | null) => b !== null && a.toLowerCase() === b.toLowerCase();
-  const missing = [
-    !found.some((name) => same(name, names.gigs)) && `No calendar is named "${names.gigs}" (GIGS_CALENDAR).`,
-    names.holds &&
-      !found.some((name) => same(name, names.holds)) &&
-      `No calendar is named "${names.holds}" (HOLDS_CALENDAR).`,
-  ].filter(Boolean);
-
-  return (
-    <>
-      <p className="mb-3 text-sm text-good">Signed in to iCloud.</p>
-      <ul className="divide-y divide-line text-sm">
-        {found.map((name, i) => (
-          <li key={`${name}-${i}`} className="flex items-center justify-between gap-3 py-2">
-            <span className="min-w-0 truncate">{name || <em className="text-muted">(no name)</em>}</span>
-            {same(name, names.gigs) ? (
-              <Badge tone="good">Read as jobs</Badge>
-            ) : same(name, names.holds) ? (
-              <Badge tone="good">Read as holds</Badge>
-            ) : same(name, names.wanted) ? (
-              <Badge tone="good">Read as wanted</Badge>
-            ) : (
-              <Badge tone="muted">Not read</Badge>
-            )}
-          </li>
-        ))}
-      </ul>
-      {missing.map((problem) => (
-        <p key={String(problem)} className="mt-2 text-sm text-bad">
-          {problem}
-        </p>
-      ))}
-      {!found.some((name) => same(name, names.wanted)) && (
-        <p className="mt-2 text-sm text-muted">
-          No &ldquo;{names.wanted}&rdquo; calendar yet. Make one to track dates you were asked for but weren&apos;t free.
-        </p>
-      )}
-      {!names.holds && (
-        <p className="mt-2 text-sm text-warn">
-          HOLDS_CALENDAR isn&apos;t set, so holds aren&apos;t tracked. Set it once you&apos;ve made the holds calendar.
-        </p>
-      )}
-    </>
-  );
+  return <CalendarList found={found} names={names} />;
 }
 
 function RunStatus({ run, now }: { run: SyncRun; now: Date }) {
@@ -137,26 +82,9 @@ function Fact({ label, value, note }: { label: string; value: React.ReactNode; n
 export default async function StatusPage() {
   const user = await requireUser("/status");
   const userId = user.id;
-  const ownCalendar = usesEnvCalendar(user);
+  const { timeZone, zoneProblem, trackFrom: from, names, connected } = await loadSettings(userId);
   await connection();
   const now = new Date();
-
-  let timeZone: string;
-  let zoneProblem: string | null = null;
-  try {
-    timeZone = appTimeZone();
-  } catch (error) {
-    timeZone = "UTC";
-    zoneProblem = messageOf(error);
-  }
-
-  let from: string | null = null;
-  let fromProblem: string | null = null;
-  try {
-    from = trackFrom();
-  } catch (error) {
-    fromProblem = messageOf(error);
-  }
 
   const scoped = forUser(userId);
   const live = { deletedAt: null };
@@ -170,7 +98,6 @@ export default async function StatusPage() {
     scoped.gig.count({ where: { ...live, parseError: { not: null } } }),
   ]);
   const lastGood = runs.find((run) => run.ok);
-  const names = calendarNames();
   const emailsToday = user.isOwner ? await emailsSentToday(now) : null;
 
   return (
@@ -182,21 +109,26 @@ export default async function StatusPage() {
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">Status</h1>
         </div>
-        {ownCalendar && <SyncButton {...sync} />}
+        {connected && <SyncButton {...sync} />}
       </header>
 
-      {ownCalendar ? (
+      {connected ? (
         <Card
           title="Calendars"
           note={`This app reads only "${names.gigs}"${names.holds ? `, "${names.holds}"` : ""} and "${names.wanted}" if it exists. It never changes anything in your calendar.`}
         >
           <Suspense fallback={<p className="text-sm text-muted">Checking iCloud…</p>}>
-            <Calendars />
+            <Calendars userId={userId} names={names} />
           </Suspense>
         </Card>
       ) : (
         <Card title="Calendars">
-          <p className="text-sm text-muted">Connecting your own iCloud calendar is coming soon.</p>
+          <p className="text-sm text-muted">
+            No iCloud calendar is connected.{" "}
+            <Link href="/?tab=settings&section=calendar" className="text-accent">
+              Connect it
+            </Link>
+          </p>
         </Card>
       )}
 
@@ -221,21 +153,16 @@ export default async function StatusPage() {
           />
           <Fact label="Holds that fell through" value={fellThrough.toLocaleString("en-US")} />
           <Fact label="Titles that couldn't be read" value={unreadable.toLocaleString("en-US")} />
-          {ownCalendar && (
-            <>
-              <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
-              <Fact
-                label="Tracking gigs from"
-                value={from ?? "Everything"}
-                note={
-                  fromProblem ??
-                  (from
-                    ? "Events before this date are ignored, so old titles don't mix up names and places. TRACK_FROM changes it."
-                    : "TRACK_FROM is set to all, so every event is read.")
-                }
-              />
-            </>
-          )}
+          <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
+          <Fact
+            label="Tracking gigs from"
+            value={from ?? "Everything"}
+            note={
+              from
+                ? "Events before this date are ignored, so old titles don't mix up names and places. Change it under Settings → Calendar."
+                : "Every event is read. Set a date under Settings → Calendar to leave out older ones."
+            }
+          />
         </div>
       </Card>
 
@@ -260,7 +187,9 @@ export default async function StatusPage() {
 
       <Card title="Last 10 syncs" note="Syncs run once a day, when you open the dashboard, and when you tap Sync now.">
         {runs.length === 0 ? (
-          <p className="text-sm text-muted">No syncs yet. Tap Sync now to run the first one.</p>
+          <p className="text-sm text-muted">
+            {connected ? "No syncs yet. Tap Sync now to run the first one." : "No syncs yet. They start once iCloud is connected."}
+          </p>
         ) : (
           <ul className="divide-y divide-line">
             {runs.map((run) => (

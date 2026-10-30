@@ -1,9 +1,10 @@
 import { after } from "next/server";
 import type { GigCalendar, SyncRun } from "@/generated/prisma/client";
-import { calendarNames, fetchGigCalendars } from "./caldav";
-import { appTimeZone, dayToDate, trackFrom } from "./dates";
+import { fetchGigCalendars } from "./caldav";
+import { dayToDate } from "./dates";
 import { forUser } from "./db";
 import { findUid, parseIcs } from "./ics";
+import { loadCredentials, loadSettings } from "./settings-store";
 import { type FetchedEvent, planSync } from "./sync";
 
 /** The dashboard syncs on open when the last sync started longer ago than this. */
@@ -22,13 +23,14 @@ export async function runSync(userId: string, fetchCalendars = fetchGigCalendars
   const scoped = forUser(userId);
   const run = await scoped.syncRun.create({ data: { userId } });
   try {
-    const timeZone = appTimeZone();
-    const names = calendarNames();
-    const from = trackFrom();
-    const calendars = await fetchCalendars(names);
+    const { timeZone, zoneProblem, names, trackFrom: from } = await loadSettings(userId);
+    if (zoneProblem) throw new Error(zoneProblem);
+    const credentials = await loadCredentials(userId);
+    if (!credentials) throw new Error("iCloud isn't connected. Add it under Settings → Calendar.");
+    const calendars = await fetchCalendars(credentials, names);
 
     const warnings: string[] = [];
-    if (!names.holds) warnings.push("HOLDS_CALENDAR isn't set, so only Gigs was read");
+    if (!names.holds) warnings.push("No holds calendar is set, so only Gigs was read");
 
     const fetched: FetchedEvent[] = [];
     const keepUids: string[] = [];
@@ -55,7 +57,7 @@ export async function runSync(userId: string, fetchCalendars = fetchGigCalendars
       else warnings.push(`Nothing in "${name}" was marked deleted this time, since an event couldn't be read`);
     }
 
-    // Everything before trackFrom() is left out, so old titles don't confuse the names and places.
+    // Everything before the user's tracking date is left out, so old titles don't confuse the names and places.
     const tracked = from ? fetched.filter((event) => event.gigDate >= from) : fetched;
 
     const plan = await scoped.$transaction(

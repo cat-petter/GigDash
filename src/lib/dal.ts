@@ -21,11 +21,3 @@ export async function requireUser(next: string): Promise<SessionUser> {
   if (!user) redirect(next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`);
   return user;
 }
-
-/**
- * Whether this user's calendar is the one in the iCloud env vars. Only the owner's is, until each
- * account stores its own. Anyone else syncing would copy the owner's gigs into their account.
- */
-export function usesEnvCalendar(user: SessionUser): boolean {
-  return user.isOwner === true;
-}

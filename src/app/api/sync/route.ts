@@ -2,11 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { SyncRun } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { hitCounter, pruneCounters } from "@/lib/counters";
-import { usesEnvCalendar } from "@/lib/dal";
 import { manualSyncWait } from "@/lib/limits";
 import { safeEqual } from "@/lib/login";
 import { OWNER_ID } from "@/lib/owner";
 import { runSync, startSync } from "@/lib/run-sync";
+import { loadSettings } from "@/lib/settings-store";
 
 // Reading two calendars from iCloud usually takes a few seconds; this leaves plenty of room.
 export const maxDuration = 60;
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!usesEnvCalendar(session.user)) {
+  if (!(await loadSettings(session.user.id)).connected) {
     return NextResponse.json({ error: "Your iCloud calendar isn't connected yet" }, { status: 409 });
   }
   const wait = await manualSyncWait(session.user.id, hitCounter);
