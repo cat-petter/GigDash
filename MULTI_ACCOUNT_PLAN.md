@@ -122,6 +122,7 @@ Test it on a copy of the production database (a Neon branch) before merging: row
 - **Owner transition:** while the owner has the placeholder email, the login page also offers `DASHBOARD_PASSWORD` (a small Better Auth plugin, `src/lib/owner-login.ts`, 5 tries a minute, 1 s delay when wrong). The dashboard shows "Add your email" until he does; confirming it uses Better Auth's change-email flow, and the password stops working.
 - Settings → Account shows the email and Log out. The rest of that section is phase 7.
 - New env vars: `BETTER_AUTH_SECRET` (falls back to a key made from `CRON_SECRET`), `BETTER_AUTH_URL` (optional; set to `http://localhost:3100` locally), `RESEND_API_KEY`, `EMAIL_FROM`. Without the Resend ones, deployed sign-in emails fail with a message; the owner's password still works.
+- Vercel preview (2026-10-30): `RESEND_API_KEY` and `EMAIL_FROM` = `Gigs <onboarding@resend.dev>` are set for Preview, branch `multi-account` only. That test sender only delivers to the Resend account's own email; a verified domain is needed before anyone else can sign in (cutover step 1). DuckDNS can't be used: it has no MX records and only one TXT value. Sign-in by link was tested on the preview and works.
 - Verified locally: sign-up by link, a new account sees none of the owner's data and can't sync (409), a used link is refused, log out deletes the session, the owner's password works then stops once his email is confirmed, the owner signs in by link, disabled endpoints return 404, tokens are stored hashed with a 900-second expiry.
 
 ### 3. Abuse protection
@@ -191,7 +192,7 @@ Code changes:
 2. On a Neon branch made from production: run the migration, deploy the branch as a preview pointed at it, log in with `DASHBOARD_PASSWORD`, and check the numbers match production.
 3. Add the new env vars to Production in Vercel.
 4. Take a Neon backup (or branch) of production, then merge `multi-account` into `main`. The production build runs the migration and the app keeps working: same data, same password, same iCloud env vars.
-5. Owner confirms his email, then fills in the Calendar section. After that, delete `DASHBOARD_PASSWORD`, `ICLOUD_*`, `*_CALENDAR`, `APP_TIMEZONE`, `TRACK_FROM` and `YOUR_NAME` from Vercel.
+5. Owner logs in with `DASHBOARD_PASSWORD` and adds his email from the dashboard, then confirms it. He must not sign up with that email on the login page first: that makes a separate empty account, and the email is then taken, so adding it to the owner silently does nothing. Then he fills in the Calendar section. After that, delete `DASHBOARD_PASSWORD`, `ICLOUD_*`, `*_CALENDAR`, `APP_TIMEZONE`, `TRACK_FROM` and `YOUR_NAME` from Vercel.
 6. A later small change removes the env fallbacks from the code.
 
 Rollback: if the merge goes wrong, revert it on `main` and restore the backup from step 4, because the old code can't use the new tables.
