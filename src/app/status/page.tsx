@@ -9,7 +9,7 @@ import { calendarNames, listCalendarNames } from "@/lib/caldav";
 import { emailsSentToday } from "@/lib/counters";
 import { requireUser, usesEnvCalendar } from "@/lib/dal";
 import { appTimeZone, trackFrom } from "@/lib/dates";
-import { db } from "@/lib/db";
+import { forUser } from "@/lib/db";
 import { formatDateTime, plural } from "@/lib/format";
 import { DAILY_EMAIL_CAP } from "@/lib/limits";
 import { isPending, syncStatus } from "@/lib/run-sync";
@@ -158,15 +158,16 @@ export default async function StatusPage() {
     fromProblem = messageOf(error);
   }
 
-  const live = { userId, deletedAt: null };
+  const scoped = forUser(userId);
+  const live = { deletedAt: null };
   const [runs, sync, active, noBookingDate, moved, fellThrough, unreadable] = await Promise.all([
-    db.syncRun.findMany({ where: { userId }, orderBy: { startedAt: "desc" }, take: 10 }),
+    scoped.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
     syncStatus(userId, now),
-    db.gig.count({ where: live }),
-    db.gig.count({ where: { ...live, bookedAt: null } }),
-    db.gig.count({ where: { ...live, status: "job", confirmedAt: { not: null } } }),
-    db.gig.count({ where: { userId, status: "hold", deletedAt: { not: null } } }),
-    db.gig.count({ where: { ...live, parseError: { not: null } } }),
+    scoped.gig.count({ where: live }),
+    scoped.gig.count({ where: { ...live, bookedAt: null } }),
+    scoped.gig.count({ where: { ...live, status: "job", confirmedAt: { not: null } } }),
+    scoped.gig.count({ where: { status: "hold", deletedAt: { not: null } } }),
+    scoped.gig.count({ where: { ...live, parseError: { not: null } } }),
   ]);
   const lastGood = runs.find((run) => run.ok);
   const names = calendarNames();
@@ -220,17 +221,21 @@ export default async function StatusPage() {
           />
           <Fact label="Holds that fell through" value={fellThrough.toLocaleString("en-US")} />
           <Fact label="Titles that couldn't be read" value={unreadable.toLocaleString("en-US")} />
-          <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
-          <Fact
-            label="Tracking gigs from"
-            value={from ?? "Everything"}
-            note={
-              fromProblem ??
-              (from
-                ? "Events before this date are ignored, so old titles don't mix up names and places. TRACK_FROM changes it."
-                : "TRACK_FROM is set to all, so every event is read.")
-            }
-          />
+          {ownCalendar && (
+            <>
+              <Fact label="Time zone" value={timeZone} note={zoneProblem ?? "Lead times and dates are counted in this zone."} />
+              <Fact
+                label="Tracking gigs from"
+                value={from ?? "Everything"}
+                note={
+                  fromProblem ??
+                  (from
+                    ? "Events before this date are ignored, so old titles don't mix up names and places. TRACK_FROM changes it."
+                    : "TRACK_FROM is set to all, so every event is read.")
+                }
+              />
+            </>
+          )}
         </div>
       </Card>
 

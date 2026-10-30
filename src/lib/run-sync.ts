@@ -2,7 +2,7 @@ import { after } from "next/server";
 import type { GigCalendar, SyncRun } from "@/generated/prisma/client";
 import { calendarNames, fetchGigCalendars } from "./caldav";
 import { appTimeZone, dayToDate, trackFrom } from "./dates";
-import { db } from "./db";
+import { forUser } from "./db";
 import { findUid, parseIcs } from "./ics";
 import { type FetchedEvent, planSync } from "./sync";
 
@@ -19,7 +19,8 @@ function messageOf(error: unknown): string {
 
 /** Fetches the user's calendars and brings their Gig rows in line, recording a SyncRun. */
 export async function runSync(userId: string, fetchCalendars = fetchGigCalendars): Promise<SyncRun> {
-  const run = await db.syncRun.create({ data: { userId } });
+  const scoped = forUser(userId);
+  const run = await scoped.syncRun.create({ data: { userId } });
   try {
     const timeZone = appTimeZone();
     const names = calendarNames();
@@ -57,29 +58,29 @@ export async function runSync(userId: string, fetchCalendars = fetchGigCalendars
     // Everything before trackFrom() is left out, so old titles don't confuse the names and places.
     const tracked = from ? fetched.filter((event) => event.gigDate >= from) : fetched;
 
-    const plan = await db.$transaction(
+    const plan = await scoped.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_ID}::int, hashtext(${userId}))`;
         const now = new Date();
-        const backfill = (await tx.syncRun.count({ where: { userId, ok: true } })) === 0;
-        if (from) await tx.gig.deleteMany({ where: { userId, gigDate: { lt: dayToDate(from) } } });
-        const existing = await tx.gig.findMany({ where: { userId } });
+        const backfill = (await tx.syncRun.count({ where: { ok: true } })) === 0;
+        if (from) await tx.gig.deleteMany({ where: { gigDate: { lt: dayToDate(from) } } });
+        const existing = await tx.gig.findMany();
         const plan = planSync({ fetched: tracked, existing, fetchedCalendars, keepUids, backfill, now, timeZone });
 
         if (plan.create.length > 0) await tx.gig.createMany({ data: plan.create.map((row) => ({ ...row, userId })) });
         for (const { uid, data } of plan.update) await tx.gig.update({ where: { userId_uid: { userId, uid } }, data });
         if (plan.seen.length > 0) {
-          await tx.gig.updateMany({ where: { userId, uid: { in: plan.seen } }, data: { lastSeenAt: now } });
+          await tx.gig.updateMany({ where: { uid: { in: plan.seen } }, data: { lastSeenAt: now } });
         }
         if (plan.delete.length > 0) {
-          await tx.gig.updateMany({ where: { userId, uid: { in: plan.delete } }, data: { deletedAt: now } });
+          await tx.gig.updateMany({ where: { uid: { in: plan.delete } }, data: { deletedAt: now } });
         }
         return plan;
       },
       { maxWait: 30_000, timeout: 30_000 },
     );
 
-    return await db.syncRun.update({
+    return await scoped.syncRun.update({
       where: { id: run.id },
       data: {
         finishedAt: new Date(),
@@ -93,7 +94,7 @@ export async function runSync(userId: string, fetchCalendars = fetchGigCalendars
       },
     });
   } catch (error) {
-    return db.syncRun.update({
+    return scoped.syncRun.update({
       where: { id: run.id },
       data: { finishedAt: new Date(), ok: false, message: messageOf(error) },
     });
@@ -101,11 +102,11 @@ export async function runSync(userId: string, fetchCalendars = fetchGigCalendars
 }
 
 export function latestRun(userId: string): Promise<SyncRun | null> {
-  return db.syncRun.findFirst({ where: { userId }, orderBy: { startedAt: "desc" } });
+  return forUser(userId).syncRun.findFirst({ orderBy: { startedAt: "desc" } });
 }
 
 export function lastGoodRun(userId: string): Promise<SyncRun | null> {
-  return db.syncRun.findFirst({ where: { userId, ok: true }, orderBy: { startedAt: "desc" } });
+  return forUser(userId).syncRun.findFirst({ where: { ok: true }, orderBy: { startedAt: "desc" } });
 }
 
 export function isPending(run: SyncRun | null, now = new Date()): boolean {

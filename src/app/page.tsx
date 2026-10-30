@@ -57,10 +57,10 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     location: groupId(places, asked.location),
   };
 
-  // The Overview greets him by name (YOUR_NAME); the other tabs are titled by name.
+  // The Overview greets the owner by name (YOUR_NAME); the other tabs are titled by name.
   const title =
     filters.tab === "overview"
-      ? greeting(now, timeZone, process.env.YOUR_NAME?.trim() || undefined)
+      ? greeting(now, timeZone, (ownCalendar && process.env.YOUR_NAME?.trim()) || undefined)
       : TABS.find((tab) => tab.key === filters.tab)!.label;
 
   const header = (

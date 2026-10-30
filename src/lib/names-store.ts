@@ -1,6 +1,5 @@
-import type { Prisma } from "@/generated/prisma/client";
 import { dateToDay } from "./dates";
-import { db } from "./db";
+import { forUser } from "./db";
 import {
   countSpellings,
   DEFAULT_RULES,
@@ -16,15 +15,14 @@ import {
 export const NAME_KINDS: NameKind[] = ["person", "place"];
 
 export async function loadRules(userId: string): Promise<Record<NameKind, MatchRules>> {
-  const rows = await db.matchRule.findMany({ where: { userId }, omit: { userId: true, updatedAt: true } });
+  const rows = await forUser(userId).matchRule.findMany({ omit: { userId: true, updatedAt: true } });
   const rules = { ...DEFAULT_RULES };
   for (const { kind, ...row } of rows) rules[kind] = row;
   return rules;
 }
 
 export async function loadSavedNames(userId: string): Promise<Record<NameKind, SavedName[]>> {
-  const rows = await db.savedName.findMany({
-    where: { userId },
+  const rows = await forUser(userId).savedName.findMany({
     select: { id: true, kind: true, label: true, spellings: { select: { key: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -38,8 +36,7 @@ export async function loadSavedNames(userId: string): Promise<Record<NameKind, S
 /** The people or places as they are now, worked out the same way the dashboard does. */
 async function currentNames(userId: string, kind: NameKind): Promise<Names> {
   const [gigs, saved, rules] = await Promise.all([
-    db.gig.findMany({
-      where: { userId },
+    forUser(userId).gig.findMany({
       select: { person: true, personKey: true, location: true, locationKey: true, gigDate: true, deletedAt: true },
     }),
     loadSavedNames(userId),
@@ -56,7 +53,7 @@ async function currentNames(userId: string, kind: NameKind): Promise<Names> {
   return groupNames(spellings, saved[kind], rules[kind]);
 }
 
-type Tx = Prisma.TransactionClient;
+type Tx = Pick<ReturnType<typeof forUser>, "savedName" | "pinnedSpelling">;
 
 export class NameError extends Error {}
 
@@ -81,14 +78,14 @@ async function keep(tx: Tx, userId: string, kind: NameKind, group: NameGroup): P
 
 /** Saved names left with no spellings and no name of their own do nothing, so they go. */
 async function tidy(tx: Tx, userId: string, kind: NameKind) {
-  await tx.savedName.deleteMany({ where: { userId, kind, label: null, spellings: { none: {} } } });
+  await tx.savedName.deleteMany({ where: { kind, label: null, spellings: { none: {} } } });
 }
 
 /** Sets how a person or place shows in the app. An empty label goes back to the most-used spelling. */
 export async function renameName(userId: string, kind: NameKind, id: string, label: string) {
   const group = findGroup(await currentNames(userId, kind), id);
   const text = label.trim().replace(/\s+/g, " ").slice(0, 80);
-  await db.$transaction(async (tx) => {
+  await forUser(userId).$transaction(async (tx) => {
     const savedId = await keep(tx, userId, kind, group);
     await tx.savedName.update({ where: { id_userId: { id: savedId, userId } }, data: { label: text || null } });
   });
@@ -101,7 +98,7 @@ export async function moveSpelling(userId: string, kind: NameKind, key: string, 
   if (!from) throw new NameError("That spelling isn't in the calendar anymore. The page has been refreshed.");
   const target = to === NEW_NAME ? null : findGroup(names, to);
   if (target?.id === from.id) return;
-  await db.$transaction(async (tx) => {
+  await forUser(userId).$transaction(async (tx) => {
     // The rest of its group stays together, as it was.
     await keep(tx, userId, kind, from);
     const targetId = target
@@ -121,10 +118,10 @@ export async function mergeNames(userId: string, kind: NameKind, id: string, int
   const group = findGroup(names, id);
   const into = findGroup(names, intoId);
   if (group.id === into.id) return;
-  await db.$transaction(async (tx) => {
+  await forUser(userId).$transaction(async (tx) => {
     const fromId = await keep(tx, userId, kind, group);
     const toId = await keep(tx, userId, kind, into);
-    await tx.pinnedSpelling.updateMany({ where: { userId, savedNameId: fromId }, data: { savedNameId: toId } });
+    await tx.pinnedSpelling.updateMany({ where: { savedNameId: fromId }, data: { savedNameId: toId } });
     if (!into.named && group.named) {
       await tx.savedName.update({ where: { id_userId: { id: toId, userId } }, data: { label: group.label } });
     }
@@ -135,11 +132,11 @@ export async function mergeNames(userId: string, kind: NameKind, id: string, int
 /** Forgets what was set by hand for one person or place, so the rules decide again. */
 export async function resetName(userId: string, kind: NameKind, id: string) {
   const group = findGroup(await currentNames(userId, kind), id);
-  if (group.savedId) await db.savedName.delete({ where: { id_userId: { id: group.savedId, userId } } });
+  if (group.savedId) await forUser(userId).savedName.delete({ where: { id_userId: { id: group.savedId, userId } } });
 }
 
 export async function saveRules(userId: string, kind: NameKind, rules: MatchRules) {
-  await db.matchRule.upsert({
+  await forUser(userId).matchRule.upsert({
     where: { userId_kind: { userId, kind } },
     create: { userId, kind, ...rules },
     update: rules,
@@ -147,5 +144,5 @@ export async function saveRules(userId: string, kind: NameKind, rules: MatchRule
 }
 
 export async function resetRules(userId: string, kind: NameKind) {
-  await db.matchRule.deleteMany({ where: { userId, kind } });
+  await forUser(userId).matchRule.deleteMany({ where: { kind } });
 }

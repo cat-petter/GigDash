@@ -1,5 +1,5 @@
 import { dateToDay } from "./dates";
-import { db } from "./db";
+import { forUser } from "./db";
 import { countSpellings, groupNames, type MatchRules, type NameKind, type Names } from "./names";
 import { loadRules, loadSavedNames } from "./names-store";
 import type { GigRow } from "./stats";
@@ -19,8 +19,7 @@ export type GigData = {
  */
 export async function loadGigs(userId: string): Promise<GigData> {
   const [gigs, saved, rules] = await Promise.all([
-    db.gig.findMany({
-      where: { userId },
+    forUser(userId).gig.findMany({
       select: {
         uid: true,
         rawTitle: true,

@@ -136,7 +136,9 @@ Test it on a copy of the production database (a Neon branch) before merging: row
 - Verified locally against the dev server and the throwaway Postgres, with Cloudflare's published test keys: no token and a rejected token both refused with no counters spent; mailbox limit, including `+tag` and case spellings; IP limit; 8 parallel requests sending exactly 3 links; the cap at 79 → 80 → refused, shown on `/status`; a window ending starts over; Sync now 200 → 429 → 200; a production server with no keys refusing links.
 - Verified on the preview (2026-10-30) with real Turnstile keys: no token and a forged token refused, and a full sign-in by link. Better Auth only trusts `x-forwarded-for` when it holds one address, and Vercel's requests pass that: the preview's `RateLimit` rows are keyed by IP, not `no-trusted-ip`.
 
-### 4. Scope every query to the logged-in user
+### 4. Scope every query to the logged-in user — done
+
+Done: `forUser(userId)` in `src/lib/db.ts` (the rules are in `src/lib/user-scope.ts`, with tests) puts the user's id on every `where` and new row for the users' tables, and refuses any operation it doesn't know. Lint refuses those tables on plain `db` in `src/`. It covers the top level of a query, so no nested writes on these tables, and raw SQL isn't scoped. The greeting's `YOUR_NAME` and the time zone and tracking date on `/status` show for the owner only until phase 5 moves them. Checked with two users on the throwaway Postgres: reads, guessed ids, handing a row over, names, rules, a rolled-back transaction, and a sync that left the other user's gigs alone. That check isn't committed, since it needs a database; phase 8 adds the lasting one.
 
 Every database call takes a `userId` and filters on it. Callers get it from `currentUser()`.
 
@@ -145,7 +147,7 @@ Every database call takes a `userId` and filters on it. Callers get it from `cur
 - `src/app/names-actions.ts`: pass `(await currentUser()).id` down.
 - `src/app/status/page.tsx`: the counts and the last 10 runs, per user.
 - `src/app/page.tsx`: per-user greeting, time zone and calendar names.
-- The Prisma extension (`db.forUser(userId)`) that adds `userId` to every `where` and `data` for those models.
+- The Prisma extension (`forUser(userId)`) that adds `userId` to every `where` and `data` for those models.
 
 ### 5. Settings that move from env vars to the database
 
