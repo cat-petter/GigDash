@@ -1,18 +1,20 @@
 /**
- * Fills the database with about 150 made-up gigs, so the dashboard can be built
- * and demoed without an iCloud account. It deletes the owner's gigs, syncs and names first.
+ * Makes a demo user with about 150 made-up gigs, so the dashboard can be built and demoed without
+ * an iCloud account. Run again, it replaces that user's rows. No one else's are touched.
  *
  *   npm run seed:demo            # local databases only
- *   npm run seed:demo -- --force # any database (this wipes it)
+ *   npm run seed:demo -- --force # any database
  */
 import "dotenv/config";
 import type { Prisma } from "../src/generated/prisma/client";
 import { addDays, appTimeZone, dayInZone, daysBetween, dayToDate, type Day } from "../src/lib/dates";
 import { db } from "../src/lib/db";
-import { OWNER_ID } from "../src/lib/owner";
 import { parseTitle } from "../src/lib/parse-title";
 
 const COUNT = 150;
+const DEMO_ID = "demo";
+// .invalid can never be a real address. Locally, sign in with it and take the link from the dev server's log.
+const DEMO_EMAIL = "demo@gigdash.invalid";
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // A fixed seed, so every run makes the same gigs (relative to today).
@@ -83,7 +85,7 @@ function refuseRemoteDatabase() {
   if (!url) throw new Error("DATABASE_URL isn't set");
   const host = new URL(url).hostname;
   if (!["localhost", "127.0.0.1", "::1"].includes(host) && !process.argv.includes("--force")) {
-    throw new Error(`DATABASE_URL points at ${host}, not this computer. This wipes it; add --force if you mean it.`);
+    throw new Error(`DATABASE_URL points at ${host}, not this computer. This adds a demo user there; add --force if you mean it.`);
   }
 }
 
@@ -118,7 +120,7 @@ async function main() {
     const leadDays = bookedAt ? daysBetween(dayInZone(bookedAt, timeZone), options.gigDate) : null;
     const firstSeenAt = bookedAt && bookedAt > firstSync ? bookedAt : firstSync;
     gigs.push({
-      userId: OWNER_ID,
+      userId: DEMO_ID,
       uid: `demo-${gigs.length + 1}@gigdash`,
       rawTitle: options.title,
       calendar: options.status === "job" ? "gigs" : "holds",
@@ -211,9 +213,14 @@ async function main() {
     recurring: true,
   });
 
-  // The demo data belongs to the owner the migrations made; only the owner's rows are replaced.
-  const mine = { where: { userId: OWNER_ID } };
+  // Only the demo user's rows are replaced.
+  const mine = { where: { userId: DEMO_ID } };
   await db.$transaction([
+    db.user.upsert({
+      where: { id: DEMO_ID },
+      create: { id: DEMO_ID, name: "Demo", email: DEMO_EMAIL, emailVerified: true, timeZone },
+      update: {},
+    }),
     db.gig.deleteMany(mine),
     db.syncRun.deleteMany(mine),
     db.savedName.deleteMany(mine),
@@ -225,7 +232,7 @@ async function main() {
   const startedAt = new Date(now.getTime() - 4 * 60 * 1000);
   await db.syncRun.create({
     data: {
-      userId: OWNER_ID,
+      userId: DEMO_ID,
       startedAt,
       finishedAt: new Date(startedAt.getTime() + 2300),
       ok: true,

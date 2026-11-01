@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:db": "vitest run --config vitest.db.config.mts",
     "db:migrate": "prisma migrate deploy",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "postinstall": "prisma generate"

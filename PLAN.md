@@ -67,6 +67,8 @@ SyncRun
   startedAt, finishedAt, ok, message, fetched/created/updated/deleted counts
 ```
 
+Since the move to accounts (`MULTI_ACCOUNT_PLAN.md`), every table above and `SavedName`, `PinnedSpelling`, `MatchRule` and `CalendarAccount` have a `userId`, and `Gig`'s key is `userId` + `uid`. `User`, `Session`, `Account`, `Verification` and `RateLimit` are Better Auth's; `LimitCounter` holds the abuse limits. `prisma/schema.prisma` has the current fields. Each user's tables have row-level security (migration `6_row_level_security`), and `forUser` in `src/lib/db.ts` is the way in.
+
 Rules:
 - **Moving calendars.** Rows are keyed by UID. A hold moved into "Gigs" updates the same row: status flips to `job` and `confirmedAt` is set. That gives hold→job conversion and time-to-confirm.
 - **Calendar vs. title.** The calendar decides the status. If the title's keyword disagrees (for example, it's in "Gigs" but still says "hold"), the calendar wins and the event is flagged in "Needs attention".
