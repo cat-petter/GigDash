@@ -1,5 +1,6 @@
 import { after, type NextRequest, NextResponse } from "next/server";
 import type { SyncRun } from "@/generated/prisma/client";
+import { pruneExpiredLogins } from "@/lib/accounts-store";
 import { auth } from "@/lib/auth";
 import { hitCounter, pruneCounters } from "@/lib/counters";
 import { manualSyncWait } from "@/lib/limits";
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   if (!secret || !safeEqual(header, `Bearer ${secret}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  await pruneCounters().catch(console.error);
+  await Promise.all([pruneCounters(), pruneExpiredLogins()]).catch(console.error);
   const results = await syncOneByOne(await connectedUserIds(), async (userId) => {
     const running = runSync(userId);
     after(() => running);

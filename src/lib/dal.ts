@@ -8,9 +8,15 @@ import { auth, type SessionUser } from "./auth";
  * place pages and actions learn who is asking; a user id never comes from the request itself.
  */
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  return (await currentSession())?.user ?? null;
 });
+
+const currentSession = cache(async () => auth.api.getSession({ headers: await headers() }));
+
+/** Which of the user's sessions this device is, to mark it in the list of devices. */
+export async function currentSessionId(): Promise<string | null> {
+  return (await currentSession())?.session.id ?? null;
+}
 
 /**
  * Sends anyone who isn't signed in to /login, and returns who is. The proxy only checks that a

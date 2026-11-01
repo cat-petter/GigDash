@@ -1,6 +1,6 @@
 import type { SessionUser } from "@/lib/auth";
 import type { CalendarSettings } from "@/lib/credentials";
-import { type Filters, SECTIONS, withFilter } from "@/lib/filters";
+import { type Filters, sectionsFor, withFilter } from "@/lib/filters";
 import { plural } from "@/lib/format";
 import type { MatchRules, NameKind, Names } from "@/lib/names";
 import { AccountSettings } from "./AccountSettings";
@@ -9,6 +9,7 @@ import { Card } from "./Card";
 import { NamesManager } from "./NamesManager";
 import { RulesForm } from "./RulesForm";
 import { Segmented } from "./Segmented";
+import { UsersSettings } from "./UsersSettings";
 
 /** "14 people from 22 spellings" */
 function summary(names: Names, one: string, many: string): string {
@@ -33,17 +34,20 @@ export function SettingsView({
   user: SessionUser;
   settings: CalendarSettings;
 }) {
+  const sections = sectionsFor(user.isOwner);
   return (
     <>
       <Segmented
         label="Settings"
-        options={SECTIONS}
+        options={sections}
         current={filters.section}
         hrefOf={(section) => withFilter(filters, { section })}
+        columns={sections.length > 5 ? 3 : undefined}
       />
       {filters.section === "people" && <NamesManager kind="person" groups={people.groups} />}
       {filters.section === "places" && <NamesManager kind="place" groups={places.groups} />}
-      {filters.section === "account" && <AccountSettings user={user} />}
+      {filters.section === "account" && <AccountSettings user={user} timeZone={settings.timeZone} />}
+      {filters.section === "users" && user.isOwner && <UsersSettings user={user} timeZone={settings.timeZone} />}
       {filters.section === "calendar" && (
         <Card title="iCloud calendar" note="This app only ever reads your calendars. It never changes anything in them.">
           <CalendarForm settings={settings} zones={Intl.supportedValuesOf("timeZone")} />

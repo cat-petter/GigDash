@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accountCounterKeys,
   DAILY_EMAIL_CAP,
   dailyEmailKey,
   type Hit,
@@ -99,6 +100,21 @@ describe("spendDailyEmail", () => {
   it("names the counter after the UTC date", () => {
     expect(dailyEmailKey(new Date("2026-10-30T23:59:59Z"))).toBe("emails:2026-10-30");
     expect(dailyEmailKey(new Date("2026-10-31T00:00:00Z"))).toBe("emails:2026-10-31");
+  });
+});
+
+describe("accountCounterKeys", () => {
+  it("names every counter that's about one user, so deleting them leaves none behind", async () => {
+    const { hit, rows } = counters();
+    await connectionCheckAllowed("a", hit);
+    await manualSyncWait("a", hit, NOW);
+    await linkLimitProblem("A+tag@x.com", "1.2.3.4", "secret", hit);
+    const keys = accountCounterKeys("a", "a@x.com", "secret");
+    // All but the IP's counter, which is about the network and may be shared.
+    expect([...rows.keys()].filter((key) => !keys.includes(key))).toHaveLength(1);
+    expect(keys).toHaveLength(3);
+    for (const key of keys) expect(rows.has(key)).toBe(true);
+    expect(accountCounterKeys("b", "b@x.com", "secret").some((key) => rows.has(key))).toBe(false);
   });
 });
 

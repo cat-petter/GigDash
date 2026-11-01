@@ -67,13 +67,21 @@ export function dailyEmailKey(now = new Date()): string {
 
 /** Counts a sign-in to iCloud from the Calendar settings. False means it mustn't be tried. */
 export async function connectionCheckAllowed(userId: string, hit: Hit): Promise<boolean> {
-  const { count } = await hit(`icloud-check:${userId}`, CONNECTION_CHECKS.windowSeconds);
+  const { count } = await hit(connectionCheckKey(userId), CONNECTION_CHECKS.windowSeconds);
   return count <= CONNECTION_CHECKS.max;
+}
+
+const connectionCheckKey = (userId: string) => `icloud-check:${userId}`;
+const manualSyncKey = (userId: string) => `sync:${userId}`;
+
+/** The counters about one user, which go when their account does. */
+export function accountCounterKeys(userId: string, email: string, secret: string): string[] {
+  return [connectionCheckKey(userId), manualSyncKey(userId), hashed("link-email", mailboxOf(email), secret)];
 }
 
 /** Counts a Sync now. Returns how many seconds to wait, or null if it can go ahead. */
 export async function manualSyncWait(userId: string, hit: Hit, now = new Date()): Promise<number | null> {
-  const { count, resetAt } = await hit(`sync:${userId}`, MANUAL_SYNC.windowSeconds);
+  const { count, resetAt } = await hit(manualSyncKey(userId), MANUAL_SYNC.windowSeconds);
   if (count <= MANUAL_SYNC.max) return null;
   return Math.max(1, Math.ceil((resetAt.getTime() - now.getTime()) / 1000));
 }

@@ -11,7 +11,7 @@ export type WhenKey = "upcoming" | "past" | "all";
 export type ShowKey = "gigs" | Status;
 export type SortKey = "date" | "date-desc" | "lead" | "lead-desc" | "price-desc" | "price";
 /** Settings tab: which list to manage. */
-export type SectionKey = "people" | "places" | "rules" | "calendar" | "account";
+export type SectionKey = "people" | "places" | "rules" | "calendar" | "account" | "users";
 /** Stats tab: the card that's open, if any. */
 export type CardKey = "location" | "musician" | "busiest";
 /** The busiest card: a month, half a year or a year at a time, or dates he picks. */
@@ -62,7 +62,13 @@ export const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: "rules", label: "Rules" },
   { key: "calendar", label: "Calendar" },
   { key: "account", label: "Account" },
+  { key: "users", label: "Users" },
 ];
+
+/** The sections this person can open. Users is the owner's. */
+export function sectionsFor(isOwner: boolean | null | undefined): { key: SectionKey; label: string }[] {
+  return isOwner ? SECTIONS : SECTIONS.filter((section) => section.key !== "users");
+}
 
 export const CARDS: { key: CardKey }[] = [{ key: "location" }, { key: "musician" }, { key: "busiest" }];
 

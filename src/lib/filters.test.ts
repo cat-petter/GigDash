@@ -14,6 +14,7 @@ import {
   periodLabel,
   periodOf,
   rangeLabel,
+  sectionsFor,
   toQuery,
   withFilter,
 } from "./filters";
@@ -146,6 +147,12 @@ describe("toQuery and withFilter", () => {
     expect(isFiltered(filters({ tab: "gigs", when: "all", show: "job", sort: "lead" }))).toBe(false);
     expect(isFiltered(filters({ tab: "settings", section: "rules" }))).toBe(false);
     expect(isFiltered(filters({ range: "month" }))).toBe(true);
+  });
+
+  it("only offers the Users section to the owner", () => {
+    expect(sectionsFor(true).map((section) => section.key)).toContain("users");
+    expect(sectionsFor(false).map((section) => section.key)).not.toContain("users");
+    expect(sectionsFor(false).map((section) => section.key)).toContain("account");
   });
 
   it("reads the Settings section, falling back to People", () => {

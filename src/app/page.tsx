@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { AddEmailCard, LogOutButton } from "@/components/AccountSettings";
 import { Card } from "@/components/Card";
+import { FirstRun } from "@/components/FirstRun";
 import { GigsView } from "@/components/GigsView";
 import { OverviewView } from "@/components/OverviewView";
 import { PendingFrame, PendingProvider } from "@/components/Pending";
@@ -9,9 +10,10 @@ import { SettingsView } from "@/components/SettingsView";
 import { StatsView } from "@/components/StatsView";
 import { SyncButton } from "@/components/SyncButton";
 import { TabBar } from "@/components/TabBar";
+import { isFirstRun } from "@/lib/accounts";
 import { requireUser } from "@/lib/dal";
 import { dayInZone } from "@/lib/dates";
-import { DEFAULT_FILTERS, type Filters, parseFilters, TABS, withFilter } from "@/lib/filters";
+import { DEFAULT_FILTERS, type Filters, parseFilters, sectionsFor, TABS, withFilter } from "@/lib/filters";
 import { greeting } from "@/lib/format";
 import { loadGigs } from "@/lib/gigs";
 import type { Names } from "@/lib/names";
@@ -49,6 +51,8 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
     ...asked,
     person: groupId(people, asked.person),
     location: groupId(places, asked.location),
+    // A section this person can't open, like Users typed into the address, shows the default one.
+    section: sectionsFor(user.isOwner).some(({ key }) => key === asked.section) ? asked.section : DEFAULT_FILTERS.section,
   };
 
   // The Overview greets them by name; the other tabs are titled by name.
@@ -92,6 +96,10 @@ export default async function Dashboard({ searchParams }: PageProps<"/">) {
       )}
     </>
   );
+
+  if (isFirstRun({ connected, gigs: rows.length, tab: filters.tab })) {
+    return <FirstRun email={user.email} settings={settings} notices={notices} />;
+  }
 
   if (rows.every((row) => row.deleted) && filters.tab !== "settings") {
     return (

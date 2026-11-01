@@ -34,6 +34,13 @@ describe("proxy", () => {
       expect(location(proxy(request(path, "gigdash.session_token=stale")))).toBeNull();
     }
   });
+
+  it("shows the privacy page without a session, and nothing that only starts the same", () => {
+    expect(location(proxy(request("/privacy")))).toBeNull();
+    expect(location(proxy(request("/privacy", "gigdash.session_token=stale")))).toBeNull();
+    expect(location(proxy(request("/privacy-export")))).toBe("https://gigdash.example/login?next=%2Fprivacy-export");
+    expect(location(proxy(request("/privacy/users")))).toBe("https://gigdash.example/login?next=%2Fprivacy%2Fusers");
+  });
 });
 
 describe("proxy matcher", () => {

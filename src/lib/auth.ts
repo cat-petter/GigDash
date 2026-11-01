@@ -89,6 +89,11 @@ export const auth = betterAuth({
     "/link-social",
     "/unlink-account",
     "/list-accounts",
+    // Settings → Account lists and ends sessions from the server. These would hand out session tokens.
+    "/list-sessions",
+    "/revoke-session",
+    "/revoke-sessions",
+    "/revoke-other-sessions",
   ],
   plugins: [
     magicLink({
