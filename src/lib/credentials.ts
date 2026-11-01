@@ -74,6 +74,11 @@ function envCredentials(env: Env): IcloudCredentials | null {
   return email && password ? { email, password } : null;
 }
 
+/** There are sign-in details to use: their own, or the env vars for an owner who hasn't saved any. */
+export function hasCalendar(user: Pick<UserRow, "isOwner">, hasAccount: boolean, env: Env = process.env): boolean {
+  return hasAccount || (user.isOwner && Boolean(envCredentials(env)));
+}
+
 /** Everything about a user's calendar and dates except the password, so a page never has to decrypt it. */
 export type CalendarSettings = {
   name: string;
@@ -104,7 +109,7 @@ export function calendarSettings(user: UserRow, account: Account | null, env: En
     trackFrom: user.trackFrom && dateToDay(user.trackFrom),
     names,
     icloudEmail: account?.icloudEmail ?? (fromEnv ? (env.ICLOUD_EMAIL?.trim() ?? "") : ""),
-    connected: Boolean(account || (fromEnv && envCredentials(env))),
+    connected: hasCalendar(user, Boolean(account), env),
     fromEnv,
   };
 }

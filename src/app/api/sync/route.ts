@@ -1,14 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, NextResponse } from "next/server";
 import type { SyncRun } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { hitCounter, pruneCounters } from "@/lib/counters";
 import { manualSyncWait } from "@/lib/limits";
 import { safeEqual } from "@/lib/login";
-import { OWNER_ID } from "@/lib/owner";
 import { runSync, startSync } from "@/lib/run-sync";
-import { loadSettings } from "@/lib/settings-store";
+import { connectedUserIds, loadSettings } from "@/lib/settings-store";
+import { cronStatus, syncOneByOne } from "@/lib/sync-all";
 
-// Reading two calendars from iCloud usually takes a few seconds; this leaves plenty of room.
+// Reading two calendars from iCloud usually takes a few seconds, so the cron has room for about 10 users.
 export const maxDuration = 60;
 
 function summary(run: SyncRun) {
@@ -24,9 +24,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await pruneCounters().catch(console.error);
-  // Only the owner has calendar settings until accounts can add their own.
-  const run = await runSync(OWNER_ID);
-  return NextResponse.json(summary(run), { status: run.ok ? 200 : 500 });
+  const results = await syncOneByOne(await connectedUserIds(), async (userId) => {
+    const running = runSync(userId);
+    after(() => running);
+    return summary(await running);
+  });
+  const failed = results.filter((result) => !result.ok).length;
+  return NextResponse.json({ users: results.length, failed, results }, { status: cronStatus(results) });
 }
 
 /** The Sync now button. Returns { pending: true } if the sync is still going when this returns. */

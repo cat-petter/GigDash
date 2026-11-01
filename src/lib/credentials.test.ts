@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { calendarSettings, type CalendarFields, decrypt, encrypt, icloudCredentials, parseCalendarFields } from "./credentials";
+import { calendarSettings, type CalendarFields, decrypt, encrypt, hasCalendar, icloudCredentials, parseCalendarFields } from "./credentials";
 
 const KEY = randomBytes(32).toString("base64");
 const OTHER_KEY = randomBytes(32).toString("base64");
@@ -71,6 +71,23 @@ const ownerEnv = {
   APP_TIMEZONE: "America/Chicago",
   YOUR_NAME: "Owner",
 };
+
+describe("hasCalendar", () => {
+  it("counts anyone with a saved calendar", () => {
+    expect(hasCalendar(person, true, {})).toBe(true);
+    expect(hasCalendar(owner, true, {})).toBe(true);
+  });
+
+  it("counts the env vars for the owner only", () => {
+    expect(hasCalendar(owner, false, ownerEnv)).toBe(true);
+    expect(hasCalendar(person, false, ownerEnv)).toBe(false);
+  });
+
+  it("doesn't count an owner with neither", () => {
+    expect(hasCalendar(owner, false, {})).toBe(false);
+    expect(hasCalendar(owner, false, { ICLOUD_EMAIL: "me@icloud.com" })).toBe(false);
+  });
+});
 
 describe("calendarSettings", () => {
   it("gives a user their own values and ignores the env vars", () => {

@@ -1,5 +1,5 @@
 import { dayToDate } from "./dates";
-import { calendarSettings, type CalendarSettings, type CalendarValues, encrypt, type IcloudCredentials, icloudCredentials } from "./credentials";
+import { calendarSettings, type CalendarSettings, type CalendarValues, encrypt, hasCalendar, type IcloudCredentials, icloudCredentials } from "./credentials";
 import { db, forUser } from "./db";
 
 async function stored(userId: string) {
@@ -22,6 +22,16 @@ export async function loadSettings(userId: string): Promise<CalendarSettings> {
 export async function loadCredentials(userId: string): Promise<IcloudCredentials | null> {
   const { user, account } = await stored(userId);
   return icloudCredentials(userId, user, account);
+}
+
+/** Everyone the daily cron syncs, oldest account first. Reads no passwords. */
+export async function connectedUserIds(): Promise<string[]> {
+  const users = await db.user.findMany({
+    where: { OR: [{ calendar: { isNot: null } }, { isOwner: true }] },
+    select: { id: true, isOwner: true, calendar: { select: { userId: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  return users.filter((user) => hasCalendar(user, Boolean(user.calendar))).map((user) => user.id);
 }
 
 export async function saveCalendar(userId: string, values: CalendarValues, password: string) {
