@@ -127,4 +127,10 @@ describe("safeNext", () => {
       expect(safeNext(next)).toBe("/");
     }
   });
+
+  it("drops control characters, which browsers remove before reading the address", () => {
+    for (const next of ["/\t/evil.example", "/\n/evil.example", "/\r/evil.example", "/\r\n/evil.example", "/status\t"]) {
+      expect(safeNext(next)).toBe("/");
+    }
+  });
 });

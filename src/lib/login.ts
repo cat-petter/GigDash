@@ -71,10 +71,12 @@ export function checkOwnerPassword(attempt: string, env: Env = process.env): boo
 
 /** Where to go after logging in. Only paths on this site, so a link can't bounce him elsewhere. */
 export function safeNext(next: unknown): string {
-  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+  // Browsers drop tabs and newlines from a URL and read a backslash as a slash, so "/<tab>/evil.example" leaves the site.
+  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || /[\\\p{Cc}]/u.test(next)) {
     return "/";
   }
-  return next;
+  const here = "https://here.invalid";
+  return new URL(next, here).origin === here ? next : "/";
 }
 
 /** A loose check, enough to catch typos. The sign-in link proves the address works. */
